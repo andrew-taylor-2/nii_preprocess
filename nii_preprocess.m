@@ -19,7 +19,7 @@ fprintf('%s version 1Aug2016\n', mfilename);
 if ~exist('checkForUpdates','var') || checkForUpdates
     checkForUpdate(fileparts(mfilename('fullpath')));
 end
-nii_check_dependencies;
+%nii_check_dependencies;
 if nargin < 1 %, error('Please use nii_preprocess_gui to select images'); 
     %imgs = 'T1_limegui.mat';
     [f, p] = uigetfile('*limegui.mat', 'Select a mat file');
