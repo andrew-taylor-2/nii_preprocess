@@ -414,53 +414,20 @@ spm_write_vol(hdr,img);
 function doDkiSub(imgs, matName, isDki)
 global dwi_name
 if exist('isDki','var') && (isDki)
-    if ~isfield(imgs,'DKI'), return; end;
-    if isempty(imgs.DKI), return; end; %nothing to do!
-    global ForceDTI;
-    if isempty(ForceDTI) && isFieldSub(matName, 'mk_dki')
-        fprintf('Skipping MK estimates: already computed\n')
-        [~,n,~]=filepartsSub(imgs.DKI);
-        if exist(prepostfixSub('s','du',imgs.DKI),'file'), dwi_name=['s' n 'du']; else dwi_name=['/s' n 'dun']; end
-        return;
-    end; %stats already exist
-    %preprocess - denoise
-    dwi_name='d';
-dki_d=prepostfixSub('', dwi_name, imgs.DKI);
-if exist(imgs.DKIrev)
-    dki_dr=prepostfixSub('', dwi_name, imgs.DKI);
-end;
-if isempty(ForceDTI) && exist(dki_d, 'file')
-   fprintf('Skipping DTI denoising: found %s\n', dki_d);
+%% Insert Designer Test
+% Control whether or not to run degibbs
+mm = imgMM(imgs.DTI);
+if mm > 1.9
+    desParams = '-denoise -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -rpe_none -pe_dir j- -eddy -fit_constraints 0,1,0 -median -DKIparams';
 else
-    mm = imgMM(imgs.DKI);
-    degibbs = (mm > 1.9); %partial fourier used for HCP 1.5mm isotropic images
-    dki_d = nii_dwidenoise (imgs.DKI, degibbs);
-    if exist(imgs.DKIrev)
-        dki_dr = nii_dwidenoise (imgs.DKIrev, degibbs);
-    end;
-end;
-
-    warning('If you are using fsl 5.0.9, ensure you have patched version of eddy ("--repol" option) https://fsl.fmrib.ox.ac.uk/fsldownloads/patches/eddy-patch-fsl-5.0.9/centos6/');
-    %2017: dti_1_eddy_cuda now auto-detects if cuda is installed
-    %if isEddyCuda7Sub()
-    if HalfSphere(imgs.DKI)
-        command= [fileparts(which(mfilename)) filesep 'dki_1_eddy_cuda_half.sh'];  
-    else
-        command= [fileparts(which(mfilename)) filesep 'dti_1_eddy_cuda.sh']; %% needs to be changed to turn of dtifit 
-        %command= [fileparts(which(mfilename)) filesep 'dti_1_eddy_correct.sh'];
-    end
-    %else
-    %    command= [fileparts(which(mfilename)) filesep 'dti_1_eddy.sh'];
-    %end
-     if isempty(imgs.DKIrev)
-    command=sprintf('%s "%s"',command, dki_d);
-     else
-    command=sprintf('%s "%s" "%s"',command, dki_d, dki_dr);
-     end
+    desParams = '-denoise -degibbs -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -rpe_none -pe_dir j- -eddy -fit_constraints 0,1,0 -median -DKIparams';
+end
+[fp,~,~] = fileparts(imgs.DTI);
+command = ['conda activate py37 && python designer.py ' desParams ' ' imgs.DTI ' ' fp];
+system(command);
      
     doFslCmd (command);
     dwi_name='du';
-    doDkiCoreSub(imgs.T1, imgs.DKI, matName)
 else
     doDkiCoreSub(imgs.T1, imgs.DTI, matName);
 end
@@ -573,58 +540,71 @@ if (n < 12)
     fprintf('INSUFFICIENT BVECS/BVALS FOR %s\n', imgs.DTI);
     return
 end
-%preprocess - denoise
-dti_d=prepostfixSub('', 'd', imgs.DTI);
-if exist(imgs.DTIrev)
-    dti_dr=prepostfixSub('', 'd', imgs.DTI);
-end;
-if isempty(ForceDTI) && exist(dti_d, 'file')
-   fprintf('Skipping DTI denoising: found %s\n', dti_d);
+% %preprocess - denoise
+% dti_d=prepostfixSub('', 'd', imgs.DTI);
+% if exist(imgs.DTIrev)
+%     dti_dr=prepostfixSub('', 'd', imgs.DTI);
+% end;
+% if isempty(ForceDTI) && exist(dti_d, 'file')
+%    fprintf('Skipping DTI denoising: found %s\n', dti_d);
+% else
+%     mm = imgMM(imgs.DTI);
+%     degibbs = (mm > 1.9); %partial fourier used for HCP 1.5mm isotropic images
+%     dti_d = nii_dwidenoise (imgs.DTI, degibbs);
+%     if exist(imgs.DTIrev)
+%         dti_dr = nii_dwidenoise (imgs.DTIrev, degibbs);
+%     end;
+% end;
+
+%% Insert Designer Test
+% Control whether or not to run degibbs
+mm = imgMM(imgs.DTI);
+if mm > 1.9
+    desParams = '-denoise -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -fit_constraints 0,1,0 -median -DKIparams -DTIparams';
 else
-    mm = imgMM(imgs.DTI);
-    degibbs = (mm > 1.9); %partial fourier used for HCP 1.5mm isotropic images
-    dti_d = nii_dwidenoise (imgs.DTI, degibbs);
-    if exist(imgs.DTIrev)
-        dti_dr = nii_dwidenoise (imgs.DTIrev, degibbs);
-    end;
-end;
-%preprocess - eddy
-dti_u=prepostfixSub('', 'du', imgs.DTI);
-if isempty(ForceDTI) && exist(dti_u, 'file')
-    fprintf('Skipping DTI preprocessing: found %s\n', dti_u);
-else
-    clipSub (imgs); %topup requires images with even dimensions
-    %1 - eddy current correct
-    %2017: dti_1_eddy_cuda now auto-detects if cuda is installed
-    %if isEddyCuda7Sub()
-    %9/2017: always use Eddy
-    %if isFullSphereSub(imgs.DTI)
-    if HalfSphere(imgs.DTI)
-        command= [fileparts(which(mfilename)) filesep 'dti_1_eddy_cuda_half.sh'];
-    
-    else
-        command= [fileparts(which(mfilename)) filesep 'dti_1_eddy_cuda.sh'];
-    end;
-    %else
-    %    command= [fileparts(which(mfilename)) filesep 'dti_1_eddy_correct.sh'];
-    %end
-    %else
-    %    command= [fileparts(which(mfilename)) filesep 'dti_1_eddy.sh'];
-    %end
-    if isempty(imgs.DTIrev)
-        command=sprintf('%s "%s"',command, dti_d);
-    else
-        nr = bvalCountSub(dti_dr);
-        if (nr ~= n)
-            fprintf('WARNING: BVECS/BVALS DO NOT MATCH %s %s\n', dti_d, dti_dr);
-            %return
-        end
-        command=sprintf('%s "%s" "%s"',command, dti_d, dti_dr);
-    end
-    cleanupDtiDir(imgs.DTI);
-    doFslCmd (command);
+    desParams = '-denoise -degibbs -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -fit_constraints 0,1,0 -median -DKIparams -DTIparams';
 end
-doDtiBedpostSub(imgs.DTI);
+[fp,~,~] = fileparts(imgs.DTI);
+command = ['python3 designer.py ' desParams ' ' imgs.DTI ' ' fp];
+[s,t]=system(command,'-echo');
+
+% %% ---------
+% % %preprocess - eddy
+% dti_u=prepostfixSub('', 'du', imgs.DTI);
+% if isempty(ForceDTI) && exist(dti_u, 'file')
+%     fprintf('Skipping DTI preprocessing: found %s\n', dti_u);
+% else
+%     clipSub (imgs); %topup requires images with even dimensions
+%     %1 - eddy current correct
+%     %2017: dti_1_eddy_cuda now auto-detects if cuda is installed
+%     %if isEddyCuda7Sub()
+%     %9/2017: always use Eddy
+%     %if isFullSphereSub(imgs.DTI)
+%     if HalfSphere(imgs.DTI)
+%         command= [fileparts(which(mfilename)) filesep 'dti_1_eddy_cuda_half.sh'];
+%     
+%     else
+%         command= [fileparts(which(mfilename)) filesep 'dti_1_eddy_cuda.sh'];
+%     end;
+%     %else
+%     %    command= [fileparts(which(mfilename)) filesep 'dti_1_eddy_correct.sh'];
+%     %end
+%     %else
+%     %    command= [fileparts(which(mfilename)) filesep 'dti_1_eddy.sh'];
+%     %end
+%     if isempty(imgs.DTIrev)
+%         command=sprintf('%s "%s"',command, dti_d);
+%     else
+%         nr = bvalCountSub(dti_dr);
+%         if (nr ~= n)
+%             fprintf('WARNING: BVECS/BVALS DO NOT MATCH %s %s\n', dti_d, dti_dr);
+%             %return
+%         end
+%         command=sprintf('%s "%s" "%s"',command, dti_d, dti_dr);
+%     end
+%     cleanupDtiDir(imgs.DTI);
+desOut = fullfile(fp,'dwi_designer.nii');
+doDtiBedpostSub(desOut);
 %end doDtiSub()
 
 function mm = imgMM(fnm)
@@ -739,10 +719,10 @@ if ~exist(bed_dirX, 'file'), mkdir(bed_dirX); end;
 bed_dir=fullfile(pth, 'bedpost');
 %if exist(bed_dir, 'file'), rmdir(bed_dir, 's'); end; %666 ForceBedpost
 if ~exist(bed_dir, 'file'), mkdir(bed_dir); end;
-dti_u=prepostfixSub('', 'du', dti);
+% dti_u=prepostfixSub('', 'du', dti);
 dti_x=fullfile(bed_dir, 'data.nii.gz');
-if ~exist(dti_u,'file'), error('Bedpost unable to find %s', dti_u); end;
-copyfile(dti_u, dti_x);
+if ~exist(dti,'file'), error('Bedpost unable to find %s', dti_u); end;
+copyfile(dti, dti_x);
 [bvec, bval] = getBVec(dti);
 dti_x=fullfile(bed_dir, 'bvecs');
 copyfile(bvec, dti_x);
