@@ -634,6 +634,32 @@ if exist(bed_done, 'file')
 end;
 %end isDtiDone()
 
+function check = isnifti(img)
+% Checks whether the image supplied is in NIFTI format
+% img is path to file
+[~,~,x] = fileparts(img)
+if contains(x,'.nii')
+    check = true;
+else
+    check = false;
+end
+%end isnifti()
+
+function check = isdicom(imgPath)
+% Check whether the image path has dicoms
+% Only DICOMS can be present in directory
+imgDir = dir(fullfile(imgPath,'**/*.dcm'));
+for i = 1:length(imgDir)
+    [~,~,xVec{i}] = fileparts(fullfile(imgDir(i).folder,imgDir(i).name));
+end
+xVec(find(startsWith(xVec,'.'))) = [];
+x = unique(xVec);
+if numel(x) == 1 && x == '.dcm'
+    check = true;
+else
+    check = false;
+end
+%end isdicom()
 
 %{ 
 function done = isDtiDone(imgs)
@@ -728,9 +754,9 @@ dti_x=fullfile(bed_dir, 'bvecs');
 copyfile(bvec, dti_x);
 dti_x=fullfile(bed_dir, 'bvals');
 copyfile(bval, dti_x);
-dti_faThr=prepostfixSub('', 'd_FA_thr', dti);
+brainMask = fullfile(pth, 'brain_mask.nii');
 dti_x=fullfile(bed_dir, 'nodif_brain_mask.nii.gz');
-copyfile(dti_faThr, dti_x);
+copyfile(brainMask, dti_x);
 if isGpuInstalledSub
     command=sprintf('bedpostx_gpu "%s" ', bed_dir);
 else
@@ -917,6 +943,7 @@ else
    atlasext = ['_roi_' atlas];
 end
 T1 = prefixSub('wb',imgs.T1); %warped brain extracted image
+[fp,~,~] = fileparts(imgs.DTI);
 FA = prepostfixSub('', 'd_FA', imgs.DTI);
 MD = prepostfixSub('', 'd_MD', imgs.DTI);
 if ~exist(T1,'file') fprintf('Unable to find image: %s\n',T1); return; end; %required
