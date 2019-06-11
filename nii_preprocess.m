@@ -78,11 +78,12 @@ if true
     
     if true
         if ~isempty(imgs.DWI)
-            doDesigner(imgs.DWI);
+            doDesigner(imgs);
         end
-        if dwitype == 'DTI'
+        if dwitype(imgs.DWI) == 'DTI'
             
             
+        end
     end
     
     
@@ -126,11 +127,10 @@ clear global dwi_name
 %nii_preprocess()
 
 %% Functions added by Siddhartha Dhiman @ MUSC
-function check = isnifti(imgs)
-img = imgs.DWI;
+function check = isnifti(imgPath)
 % Checks whether the image supplied is in NIFTI format
 % img is path to file
-[~,~,x] = fileparts(img);
+[~,~,x] = fileparts(imgPath);
 if contains(x,'.nii')
     check = true;
 else
@@ -138,8 +138,7 @@ else
 end
 %end isnifti()
 
-function check = isdicom(imgs)
-imgPath = imgs.DWI;
+function check = isdicom(imgPath)
 % Check whether the image path has dicoms
 % Only DICOMS can be present in directory
 imgDir = dir(fullfile(imgPath,'**/*.dcm'));
@@ -159,8 +158,7 @@ else
 end
 %end isdicom()
 
-function bvals = uniquebvals(imgs)
-imgPath = imgs.DWI;
+function bvals = uniquebvals(imgPath)
 % Create an array containing all unique bvals to determine whether series
 % is DTI or DKI.
 if isnifti(imgPath)
@@ -177,8 +175,7 @@ elseif isdicom(imgPath)
 end
 %end uniquebvals()
 
-function dcmPaths = dicomfiles(imgs)
-imgPath = imgs.DWI;
+function dcmPaths = dicomfiles(imgPath)
 % Reads all dicom files in a series folder and loads their absolute paths
 % into a cell vector
     files = dir(fullfile(imgPath,'**/*.dcm'));
@@ -187,20 +184,17 @@ imgPath = imgs.DWI;
     end
 %end dicomfiles()
 
-function nbvals = nnzbvals(imgs)
-imgPath = imgs.DWI;
+function nbvals = nnzbvals(imgPath)
 % Comptues the number of non-zero bvals in an image
 bvals = uniquebvals(imgPath);
 nbvals = numel(bvals(bvals > 0));
 %end nnzbvals()
 
-function bval = maxbval(imgs)
-imgPath = imgs.DWI;
+function bval = maxbval(imgPath)
 bval = max(uniquebvals(imgPath));
 %end maxbval()
 
-function test = dwitype(imgs)
-imgPath = imgs.DWI;
+function test = dwitype(imgPath)
 % Function determines whether image is DTI or DKI. Output is character
 % array with 'DTI' or 'DKI' string
 if maxbval(imgPath) <= 1500
@@ -214,7 +208,7 @@ end
 
 function doDesigner(imgs)
 % Calls designer on DWI image for preprocessing
-if isempty(imgs.T1) || isempty(imgs.DTI), return; end; %required
+if isempty(imgs.T1) || isempty(imgs.DWI), return; end; %required
 betT1 = prefixSub('b',imgs.T1); %brain extracted image
 if ~exist(betT1,'file'), fprintf('doDti unable to find %s\n', betT1); return; end; %required
 eT1 = prefixSub('e',imgs.T1); %enantimorphic image
@@ -240,8 +234,8 @@ if mm > 1.9
 else
     desParams = '-denoise -degibbs -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -fit_constraints 0,1,0 -median -DKIparams -DTIparams';
 end
-[fp,~,~] = fileparts(imgs.DTI);
-command = ['python3 designer.py ' desParams ' ' imgs.DTI ' ' fp];
+[fp,~,~] = fileparts(imgs.DWI);
+command = ['python3 designer.py ' desParams ' ' imgs.DWI ' ' fp];
 [s,t]=system(command,'-echo');
 %end doDesigner()
 
@@ -356,13 +350,13 @@ tStart = tic;
 
 function printDTISub(imgs, matName)
 if isempty(spm_figure('FindWin','Graphics')), spm fmri; end; %launch SPM if it is not running
-if  isempty(imgs.DTI) , return; end; %required
+if  isempty(imgs.DWI) , return; end; %required
 spm_clf;
 spm_figure('Clear', 'Graphics');
 spm_orthviews('Reset');
 f = spm_figure('FindWin','Graphics'); clf(f.Number); %clear SPM window
-FA = prepostfixSub('n', 'd_FA', imgs.DTI);
-ROI = prepostfixSub('', '_roi', imgs.DTI);
+FA = prepostfixSub('n', 'd_FA', imgs.DWI);
+ROI = prepostfixSub('', '_roi', imgs.DWI);
 if ~exist(FA,'file') || ~exist(ROI,'file') , return; end; %required
 FA = unGzSub (FA);
 ROI = unGzSub (ROI);
@@ -454,10 +448,10 @@ XYZmm = XYZmm(1:3);
 %end setCenterOfIntensitySub()
 
 function doTractographySub(imgs)
-if isempty(imgs.DTI), return; end; %required
-FAimg = prepostfixSub('', 'd_FA', imgs.DTI);
+if isempty(imgs.DWI), return; end; %required
+FAimg = prepostfixSub('', 'd_FA', imgs.DWI);
 if ~exist(FAimg,'file') , return; end; %required
-[p,n] = fsl_filepartsSub(imgs.DTI);
+[p,n] = fsl_filepartsSub(imgs.DWI);
 basename = fullfile(p,n);
 vtkname = [basename, '.vtk'];
 %next: check for bedpost
@@ -480,10 +474,10 @@ cmd = sprintf('%s -o "%s" "%s"',TrakExe, vtkname, basename);
 %old version uses SingleTensorFT that does not preserve NIfTI orientation
 %and can not use BEDPOSTX
 % function doTractographySub(imgs)
-% if isempty(imgs.DTI), return; end; %required
-% Mask = prepostfixSub('', '_FA_thr', imgs.DTI);
+% if isempty(imgs.DWI), return; end; %required
+% Mask = prepostfixSub('', '_FA_thr', imgs.DWI);
 % if ~exist(Mask,'file') , return; end; %required
-% [p,n] = fsl_filepartsSub(imgs.DTI);
+% [p,n] = fsl_filepartsSub(imgs.DWI);
 % basename = fullfile(p,n);
 % vtkname = [basename, '.vtk'];
 % if exist(vtkname,'file') , fprintf('Skipping tractography (alredy done): %s\n', vtkname); return; end; %required
@@ -547,20 +541,20 @@ global dwi_name
 if exist('isDki','var') && (isDki)
     %% Insert Designer Test
     % Control whether or not to run degibbs
-    mm = imgMM(imgs.DTI);
+    mm = imgMM(imgs.DWI);
     if mm > 1.9
         desParams = '-denoise -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -rpe_none -pe_dir j- -eddy -fit_constraints 0,1,0 -median -DKIparams';
     else
         desParams = '-denoise -degibbs -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -rpe_none -pe_dir j- -eddy -fit_constraints 0,1,0 -median -DKIparams';
     end
-    [fp,~,~] = fileparts(imgs.DTI);
-    command = ['conda activate py37 && python designer.py ' desParams ' ' imgs.DTI ' ' fp];
+    [fp,~,~] = fileparts(imgs.DWI);
+    command = ['conda activate py37 && python designer.py ' desParams ' ' imgs.DWI ' ' fp];
     system(command);
     
     doFslCmd (command);
     dwi_name='du';
 else
-    doDkiCoreSub(imgs.T1, imgs.DTI, matName);
+    doDkiCoreSub(imgs.T1, imgs.DWI, matName);
 end
 %end doDkiSub()
 
@@ -629,10 +623,10 @@ end
 %end doDkiCoreSub()
 
 function doFaMdSub(imgs, matName)
-if isempty(imgs.T1) || isempty(imgs.DTI), return; end; %required
+if isempty(imgs.T1) || isempty(imgs.DWI), return; end; %required
 T1 = prefixSub('wb',imgs.T1); %warped brain extracted image
-FA = prepostfixSub('', 'd_FA', imgs.DTI);
-MD = prepostfixSub('', 'd_MD', imgs.DTI);
+FA = prepostfixSub('', 'd_FA', imgs.DWI);
+MD = prepostfixSub('', 'd_MD', imgs.DWI);
 if ~exist(T1,'file') || ~exist(FA,'file') || ~exist(MD,'file'), return; end; %required
 global ForceDTI;
 if isempty(ForceDTI) && isFieldSub(matName, 'fa')
@@ -654,7 +648,7 @@ nii_nii2mat(wMD, 'md', matName); %8
 %end doFaMdSub()
 
 function doDtiSub(imgs)
-if isempty(imgs.T1) || isempty(imgs.DTI), return; end; %required
+if isempty(imgs.T1) || isempty(imgs.DWI), return; end; %required
 betT1 = prefixSub('b',imgs.T1); %brain extracted image
 if ~exist(betT1,'file'), fprintf('doDti unable to find %s\n', betT1); return; end; %required
 eT1 = prefixSub('e',imgs.T1); %enantimorphic image
@@ -662,26 +656,26 @@ if ~exist(eT1,'file'), eT1 = imgs.T1; end; %if no lesion, use raw T1
 if ~exist(eT1,'file'), fprintf('doDti unable to find %s\n', eT1); return; end; %required
 global ForceDTI;
 if isempty(ForceDTI) && isDtiDoneBedpost(imgs), fprintf('Skipping DTI processing (bedpost done)\n'); return; end;
-n = bvalCountSub(imgs.DTI);
+n = bvalCountSub(imgs.DWI);
 if (n < 1)
-    fprintf('UNABLE TO FIND BVECS/BVALS FOR %s\n', imgs.DTI);
+    fprintf('UNABLE TO FIND BVECS/BVALS FOR %s\n', imgs.DWI);
     return
 end
 if (n < 12)
-    fprintf('INSUFFICIENT BVECS/BVALS FOR %s\n', imgs.DTI);
+    fprintf('INSUFFICIENT BVECS/BVALS FOR %s\n', imgs.DWI);
     return
 end
 
 % Call designer
 % Control whether or not to run degibbs
-mm = imgMM(imgs.DTI);
+mm = imgMM(imgs.DWI);
 if mm > 1.9
     desParams = '-denoise -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -fit_constraints 0,1,0 -median -DKIparams -DTIparams';
 else
     desParams = '-denoise -degibbs -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -fit_constraints 0,1,0 -median -DKIparams -DTIparams';
 end
-[fp,~,~] = fileparts(imgs.DTI);
-command = ['python3 designer.py ' desParams ' ' imgs.DTI ' ' fp];
+[fp,~,~] = fileparts(imgs.DWI);
+command = ['python3 designer.py ' desParams ' ' imgs.DWI ' ' fp];
 [s,t]=system(command,'-echo');
 desOut = fullfile(fp,'dwi_designer.nii');
 doDtiBedpostSub(desOut);
@@ -705,8 +699,8 @@ if ~isEddyCuda, printf('Hint: Eddy will run faster if you install %s', eddyName)
 
 function done = isDtiDoneBedpost(imgs)
 done = false;
-if isempty(imgs.DTI), return; end;
-pth = fileparts( imgs.DTI );
+if isempty(imgs.DWI), return; end;
+pth = fileparts( imgs.DWI );
 bed_dirX=fullfile(pth, 'bedpost.bedpostX');
 bed_done=fullfile(bed_dirX, 'xfms', 'eye.mat');
 if exist(bed_done, 'file')
@@ -717,8 +711,8 @@ end;
 %{
 function done = isDtiDone(imgs)
 done = false;
-if isempty(imgs.DTI), return; end;
-p = fileparts( imgs.DTI );
+if isempty(imgs.DWI), return; end;
+p = fileparts( imgs.DWI );
 pDir = fullfile(p,'probtrackx');
 if exist(pDir, 'file')
     done = true;
@@ -727,10 +721,10 @@ end;
 %}
 
 function clipSub (imgs)
-if isempty(imgs.DTIrev)
-    nii_clipeven(imgs.DTI, true);
+if isempty(imgs.DWIrev)
+    nii_clipeven(imgs.DWI, true);
 else
-    nii_clipeven({imgs.DTI, imgs.DTIrev}, true);
+    nii_clipeven({imgs.DWI, imgs.DWIrev}, true);
 end
 %end clipSub()
 
@@ -845,7 +839,7 @@ if ~exist(bvec,'file') || ~exist(bval,'file'), error('Can not find files %s %s',
 %end getBVec()
 
 function doDtiTractSub(imgs, matName, dtiDir, atlas)
-dti = imgs.DTI;
+dti = imgs.DWI;
 global ForceDTI;
 if ~exist('atlas','var'),
     atlas = 'jhu';
@@ -988,7 +982,7 @@ setenv('FSLPARALLEL', num2str(maxThreads));
 
 function doDtiWarpSub(imgs, atlas)
 
-if isempty(imgs.T1) || isempty(imgs.DTI), return; end; %required
+if isempty(imgs.T1) || isempty(imgs.DWI), return; end; %required
 if ~exist('atlas','var'), atlas = 'jhu'; end;
 if strcmpi(atlas,'jhu')
     atlasext = '_roi';
@@ -996,7 +990,7 @@ else
     atlasext = ['_roi_' atlas];
 end
 T1 = prefixSub('wb',imgs.T1); %warped brain extracted image
-[p,~,~] = fileparts(imgs.DTI);
+[p,~,~] = fileparts(imgs.DWI);
 FA = fullfile(p,'fa.nii');
 MD = fullfile(p,'md.nii');
 if ~exist(T1,'file') fprintf('Unable to find image: %s\n',T1); return; end; %required
@@ -1010,7 +1004,7 @@ if ~exist(atlasImg,'file')
     error('Unable to find template %s', atlasImg);
 end
 [outhdr, outimg] = nii_reslice_target(atlasImg, '', T1, 0) ;
-roiname = prepostfixSub('', atlasext, imgs.DTI);
+roiname = prepostfixSub('', atlasext, imgs.DWI);
 global ForceDTI;
 if isempty(ForceDTI) && ~strcmpi(atlas,'jhu') &&  exist(roiname,'file')
     fprintf('Skipping doDtiWarpSub: file exists %s\n', roiname);
@@ -1018,14 +1012,14 @@ if isempty(ForceDTI) && ~strcmpi(atlas,'jhu') &&  exist(roiname,'file')
 end
 if exist(roiname,'file') %e.g. FSL made .nii.gz version
     delete(roiname);
-    roiname = prepostfixSub('', atlasext, imgs.DTI);
+    roiname = prepostfixSub('', atlasext, imgs.DWI);
 end
 roiname = unGzNameSub(roiname);
 outhdr.fname = roiname;
 spm_write_vol(outhdr,outimg);
 oldNormSub({T1, roiname}, nFA, 8, 10, 0 );
 delete(roiname);
-wroiname = prepostfixSub('w', atlasext, imgs.DTI);
+wroiname = prepostfixSub('w', atlasext, imgs.DWI);
 movefile(wroiname, roiname);
 %end doFaMdSub()
 
@@ -1539,8 +1533,8 @@ nam = fullfile(p, [pre, n, x]);
 
 function imgs = unGzAllSub(imgs)
 imgs.ASL = unGzSub(imgs.ASL);
-%imgs.DTI = unGzSub(imgs.DTI); %fsl is fine with gz
-%imgs.DTIrev = unGzSub(imgs.DTIrev); %fsl is fine with gz
+%imgs.DWI = unGzSub(imgs.DWI); %fsl is fine with gz
+%imgs.DWIrev = unGzSub(imgs.DWIrev); %fsl is fine with gz
 imgs.fMRI = unGzSub(imgs.fMRI);
 imgs.Lesion = unGzSub(imgs.Lesion);
 imgs.Rest = unGzSub(imgs.Rest);
@@ -1549,8 +1543,8 @@ imgs.T2 = unGzSub(imgs.T2);
 %end subjStructSub()
 
 function imgs = removeDotDtiSub(imgs)
-imgs.DTI = removeDotSub(imgs.DTI); %fsl is fine with gz
-imgs.DTIrev = removeDotSub(imgs.DTIrev); %fsl is fine with gz
+imgs.DWI = removeDotSub(imgs.DWI); %fsl is fine with gz
+imgs.DWIrev = removeDotSub(imgs.DWIrev); %fsl is fine with gz
 %end subjStructSub()
 
 function fnm = removeDotSub (fnm)
@@ -1645,8 +1639,8 @@ end;
 function imgs = subjStructSub(subjName)
 imgs.name = subjName;
 imgs.ASL = '';
-imgs.DTI = '';
-imgs.DTIrev = '';
+imgs.DWI = '';
+imgs.DWIrev = '';
 imgs.fMRI = '';
 imgs.Lesion = '';
 imgs.Rest = '';
