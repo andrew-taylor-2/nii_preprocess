@@ -628,6 +628,32 @@ else
 end
 %end isdicom()
 
+function bvals = uniquebvals(imgPath)
+% Create an array containing all unique bvals to determine whether series
+% is DTI or DKI.
+if isnifti(imgPath)
+    [bvec, bval] = getBVec(imgPath);
+    bvals = load(bval);
+    bvals = unique(bvals);
+elseif isdicom(imgPath)
+    dcms = dicomfiles(imgPath);
+    for i = 1:length(dcms)
+        tmp = dicominfo(dcms{i});
+        bvals(i) = tmp.Private_0019_100c;
+        bvals = unique(bvals);
+    end
+end
+%end uniquebvals()
+
+function dcmPaths = dicomfiles(imgPath)
+% Reads all dicom files in a series folder and loads their absolute paths
+% into a cell vector
+    files = dir(fullfile(imgPath,'**/*.dcm'));
+    for i = 1:length(files)
+        dcmPaths{i} =  fullfile(files(i).folder,files(i).name);
+    end
+%end dicomfiles()
+
 %{
 function done = isDtiDone(imgs)
 done = false;
