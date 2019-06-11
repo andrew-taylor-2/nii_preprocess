@@ -193,6 +193,10 @@ bvals = uniquebvals(imgPath);
 nbvals = numel(bvals(bvals > 0));
 %end nnzbvals()
 
+function bval = maxbval(imgPath)
+bval = max(uniquebvals(imgPath));
+%end maxbval()
+
 function test = dwitype(imgPath)
 % Function determines whether image is DTI or DKI. Output is character
 % array with 'DTI' or 'DKI' string
