@@ -129,6 +129,72 @@ diary off
 clear global dwi_name
 %nii_preprocess()
 
+%% Functions added by Siddhartha Dhiman @ MUSC
+function check = isnifti(img)
+% Checks whether the image supplied is in NIFTI format
+% img is path to file
+[~,~,x] = fileparts(img);
+if contains(x,'.nii')
+    check = true;
+else
+    check = false;
+end
+%end isnifti()
+
+function check = isdicom(imgPath)
+% Check whether the image path has dicoms
+% Only DICOMS can be present in directory
+imgDir = dir(fullfile(imgPath,'**/*.dcm'));
+for i = 1:length(imgDir)
+    [~,~,xVec{i}] = fileparts(fullfile(imgDir(i).folder,imgDir(i).name));
+end
+if ~exist('xVec','var')
+    check = false;
+    return
+else
+    x = unique(xVec);
+    if numel(x) == 1 && contains(x{1},'dcm')
+        check = true;
+    else
+        check = false;
+    end
+end
+%end isdicom()
+
+function bvals = uniquebvals(imgPath)
+% Create an array containing all unique bvals to determine whether series
+% is DTI or DKI.
+if isnifti(imgPath)
+    [bvec, bval] = getBVec(imgPath);
+    bvals = load(bval);
+    bvals = unique(bvals);
+elseif isdicom(imgPath)
+    dcms = dicomfiles(imgPath);
+    for i = 1:length(dcms)
+        tmp = dicominfo(dcms{i});
+        bvals(i) = tmp.Private_0019_100c;
+        bvals = unique(bvals);
+    end
+end
+%end uniquebvals()
+
+function dcmPaths = dicomfiles(imgPath)
+% Reads all dicom files in a series folder and loads their absolute paths
+% into a cell vector
+    files = dir(fullfile(imgPath,'**/*.dcm'));
+    for i = 1:length(files)
+        dcmPaths{i} =  fullfile(files(i).folder,files(i).name);
+    end
+%end dicomfiles()
+
+function nbvals = nnzbvals(imgPath)
+% Comptues the number of non-zero bvals in an image
+bvals = uniquebvals(imgPath);
+nbvals = numel(bvals(bvals > 0));
+%end nnzbvals()
+
+
+%% Original Functions
 function doDkiTractSub(imgs,matName,dtiDir,atlas)
 global dwi_name
 dki = imgs.DKI;
@@ -596,69 +662,6 @@ if exist(bed_done, 'file')
     done = true;
 end;
 %end isDtiDone()
-
-function check = isnifti(img)
-% Checks whether the image supplied is in NIFTI format
-% img is path to file
-[~,~,x] = fileparts(img);
-if contains(x,'.nii')
-    check = true;
-else
-    check = false;
-end
-%end isnifti()
-
-function check = isdicom(imgPath)
-% Check whether the image path has dicoms
-% Only DICOMS can be present in directory
-imgDir = dir(fullfile(imgPath,'**/*.dcm'));
-for i = 1:length(imgDir)
-    [~,~,xVec{i}] = fileparts(fullfile(imgDir(i).folder,imgDir(i).name));
-end
-if ~exist('xVec','var')
-    check = false;
-    return
-else
-    x = unique(xVec);
-    if numel(x) == 1 && contains(x{1},'dcm')
-        check = true;
-    else
-        check = false;
-    end
-end
-%end isdicom()
-
-function bvals = uniquebvals(imgPath)
-% Create an array containing all unique bvals to determine whether series
-% is DTI or DKI.
-if isnifti(imgPath)
-    [bvec, bval] = getBVec(imgPath);
-    bvals = load(bval);
-    bvals = unique(bvals);
-elseif isdicom(imgPath)
-    dcms = dicomfiles(imgPath);
-    for i = 1:length(dcms)
-        tmp = dicominfo(dcms{i});
-        bvals(i) = tmp.Private_0019_100c;
-        bvals = unique(bvals);
-    end
-end
-%end uniquebvals()
-
-function dcmPaths = dicomfiles(imgPath)
-% Reads all dicom files in a series folder and loads their absolute paths
-% into a cell vector
-    files = dir(fullfile(imgPath,'**/*.dcm'));
-    for i = 1:length(files)
-        dcmPaths{i} =  fullfile(files(i).folder,files(i).name);
-    end
-%end dicomfiles()
-
-function nbvals = nnzbvals(imgPath)
-% Comptues the number of non-zero bvals in an image
-bvals = uniquebvals(imgPath);
-nbvals = numel(bvals(bvals > 0));
-%end nnzbvals()
 
 %{
 function done = isDtiDone(imgs)
