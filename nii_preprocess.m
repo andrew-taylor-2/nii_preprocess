@@ -600,7 +600,7 @@ end;
 function check = isnifti(img)
 % Checks whether the image supplied is in NIFTI format
 % img is path to file
-[~,~,x] = fileparts(img)
+[~,~,x] = fileparts(img);
 if contains(x,'.nii')
     check = true;
 else
@@ -653,6 +653,12 @@ function dcmPaths = dicomfiles(imgPath)
         dcmPaths{i} =  fullfile(files(i).folder,files(i).name);
     end
 %end dicomfiles()
+
+function nbvals = nnzbvals(imgPath)
+% Comptues the number of non-zero bvals in an image
+bvals = uniquebvals(imgPath);
+nbvals = numel(bvals(bvals > 0));
+%end nnzbvals()
 
 %{
 function done = isDtiDone(imgs)
