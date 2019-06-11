@@ -193,6 +193,17 @@ bvals = uniquebvals(imgPath);
 nbvals = numel(bvals(bvals > 0));
 %end nnzbvals()
 
+function test = dwitype(imgPath)
+% Function determines whether image is DTI or DKI. Output is character
+% array with 'DTI' or 'DKI' string
+if nnzbvals(imgPath) == 1
+    test = 'DTI';
+elseif nnzbvals(imgPath) > 1
+    test = 'DKI';
+else
+    error('Check bvals')
+end
+%end dwitype()
 
 %% Original Functions
 function doDkiTractSub(imgs,matName,dtiDir,atlas)
