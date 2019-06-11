@@ -99,7 +99,7 @@ if true
     
     
     if true
-        if ~isempty(imgs.DTI)
+        if ~isempty(imgs.DWI)
             if ~nii_check_dims({imgs.DWI; imgs.DTIrev}), error('Fix DTI'); end;
             imgs = removeDotDtiSub(imgs);
             dtiDir = fileparts(imgs.DWI);
@@ -263,7 +263,7 @@ end
 
 function doDtiBedpost(imgs)
 t_start=tic;
-dti = imgs.DWI
+dti = imgs.DWI;
 pth = fullfile(fileparts(dti),'PARAMAPS');
 desOut = fullfile(pth,'dwi_designer.nii');
 bed_dirX=fullfile(pth, 'bedpost.bedpostX');
@@ -278,7 +278,7 @@ if ~exist(bed_dir, 'file'), mkdir(bed_dir); end;
 % dti_u=prepostfixSub('', 'du', dti);
 dti_x=fullfile(bed_dir, 'data.nii.gz');
 if ~exist(dti,'file'), error('Bedpost unable to find %s', dti_u); end;
-copyfile(dti, dti_x);
+copyfile(desOut, dti_x);
 [bvec, bval] = getBVec(desOut);
 dti_x=fullfile(bed_dir, 'bvecs');
 copyfile(bvec, dti_x);
