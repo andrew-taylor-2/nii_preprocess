@@ -200,9 +200,9 @@ bval = max(uniquebvals(imgPath));
 function test = dwitype(imgPath)
 % Function determines whether image is DTI or DKI. Output is character
 % array with 'DTI' or 'DKI' string
-if nnzbvals(imgPath) == 1
+if maxbval(imgPath) <= 1500
     test = 'DTI';
-elseif nnzbvals(imgPath) > 1
+elseif maxbval(imgPath) > 1500
     test = 'DKI';
 else
     error('Check bvals')
