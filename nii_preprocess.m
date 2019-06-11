@@ -126,7 +126,8 @@ clear global dwi_name
 %nii_preprocess()
 
 %% Functions added by Siddhartha Dhiman @ MUSC
-function check = isnifti(img)
+function check = isnifti(imgs)
+img = imgs.DWI;
 % Checks whether the image supplied is in NIFTI format
 % img is path to file
 [~,~,x] = fileparts(img);
@@ -137,7 +138,8 @@ else
 end
 %end isnifti()
 
-function check = isdicom(imgPath)
+function check = isdicom(imgs)
+imgPath = imgs.DWI;
 % Check whether the image path has dicoms
 % Only DICOMS can be present in directory
 imgDir = dir(fullfile(imgPath,'**/*.dcm'));
@@ -157,7 +159,8 @@ else
 end
 %end isdicom()
 
-function bvals = uniquebvals(imgPath)
+function bvals = uniquebvals(imgs)
+imgPath = imgs.DWI;
 % Create an array containing all unique bvals to determine whether series
 % is DTI or DKI.
 if isnifti(imgPath)
@@ -174,7 +177,8 @@ elseif isdicom(imgPath)
 end
 %end uniquebvals()
 
-function dcmPaths = dicomfiles(imgPath)
+function dcmPaths = dicomfiles(imgs)
+imgPath = imgs.DWI;
 % Reads all dicom files in a series folder and loads their absolute paths
 % into a cell vector
     files = dir(fullfile(imgPath,'**/*.dcm'));
@@ -183,17 +187,20 @@ function dcmPaths = dicomfiles(imgPath)
     end
 %end dicomfiles()
 
-function nbvals = nnzbvals(imgPath)
+function nbvals = nnzbvals(imgs)
+imgPath = imgs.DWI;
 % Comptues the number of non-zero bvals in an image
 bvals = uniquebvals(imgPath);
 nbvals = numel(bvals(bvals > 0));
 %end nnzbvals()
 
-function bval = maxbval(imgPath)
+function bval = maxbval(imgs)
+imgPath = imgs.DWI;
 bval = max(uniquebvals(imgPath));
 %end maxbval()
 
-function test = dwitype(imgPath)
+function test = dwitype(imgs)
+imgPath = imgs.DWI;
 % Function determines whether image is DTI or DKI. Output is character
 % array with 'DTI' or 'DKI' string
 if maxbval(imgPath) <= 1500
