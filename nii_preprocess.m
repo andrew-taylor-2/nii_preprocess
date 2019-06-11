@@ -74,14 +74,21 @@ if true
     %666x <-
     
     tStart = timeSub(tStart,'fMRI');
-    %warning('Skipping DTI');
+    warning('Skipping DTI');
     
     if true
+        % Preprocess with designer first. Then detect whether series is
+        % DKI or DTI. If DTI, run DTI pipeline. Otherwise if DKI, run DKI
+        % pipeline
         if ~isempty(imgs.DWI)
             doDesigner(imgs);
         end
         if dwitype(imgs.DWI) == 'DTI'
-            
+            doDtiBedpost(imgs);
+        elseif dwitype(imgs.DWI) == 'DKI'
+%             doDkiSub(imgs, matName)
+        else
+            error('Unable to determine DWI type');
             
         end
     end
@@ -216,34 +223,64 @@ if ~exist(eT1,'file'), eT1 = imgs.T1; end; %if no lesion, use raw T1
 if ~exist(eT1,'file'), fprintf('doDti unable to find %s\n', eT1); return; end; %required
 global ForceDTI;
 if isempty(ForceDTI) && isDtiDoneBedpost(imgs), fprintf('Skipping DTI processing (bedpost done)\n'); return; end;
-n = bvalCountSub(imgs.DTI);
-if (n < 1)
-    fprintf('UNABLE TO FIND BVECS/BVALS FOR %s\n', imgs.DTI);
-    return
-end
-if (n < 12)
-    fprintf('INSUFFICIENT BVECS/BVALS FOR %s\n', imgs.DTI);
-    return
-end
-
-% Call designer
-% Control whether or not to run degibbs
-mm = imgMM(imgs.DTI);
-if mm > 1.9
-    desParams = '-denoise -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -fit_constraints 0,1,0 -median -DKIparams -DTIparams';
-else
-    desParams = '-denoise -degibbs -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -fit_constraints 0,1,0 -median -DKIparams -DTIparams';
-end
-[fp,~,~] = fileparts(imgs.DWI);
+% n = bvalCountSub(imgs.DWI);
+% if (n < 1)
+%     fprintf('UNABLE TO FIND BVECS/BVALS FOR %s\n', imgs.DWI);
+%     return
+% end
+% if (n < 12)
+%     fprintf('INSUFFICIENT BVECS/BVALS FOR %s\n', imgs.DWI);
+%     return
+% end
+desParams = '-denoise -degibbs -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -fit_constraints 0,1,0 -median -DKIparams -DTIparams';
+fp = fullfile(fileparts(imgs.DWI),'PARAMAPS');
+mkdir(fp);
 command = ['python3 designer.py ' desParams ' ' imgs.DWI ' ' fp];
 [s,t]=system(command,'-echo');
 %end doDesigner()
 
+function doDtiBedpost(imgs)
+t_start=tic;
+dti = imgs.DWI
+pth = fullfile(fileparts(dti),'PARAMAPS');
+desOut = fullfile(pth,'dwi_designer.nii');
+bed_dirX=fullfile(pth, 'bedpost.bedpostX');
+%if exist(bed_dirX, 'file'), rmdir(bed_dirX, 's'); end; %666 ForceBedpost
+bed_done=fullfile(bed_dirX, 'xfms', 'eye.mat');
+global ForceDTI;
+if isempty(ForceDTI) && exist(bed_done,'file'), fprintf('Skipping bedpost (already done)\n'), return, end;
+if ~exist(bed_dirX, 'file'), mkdir(bed_dirX); end;
+bed_dir=fullfile(pth, 'bedpost');
+%if exist(bed_dir, 'file'), rmdir(bed_dir, 's'); end; %666 ForceBedpost
+if ~exist(bed_dir, 'file'), mkdir(bed_dir); end;
+% dti_u=prepostfixSub('', 'du', dti);
+dti_x=fullfile(bed_dir, 'data.nii.gz');
+if ~exist(dti,'file'), error('Bedpost unable to find %s', dti_u); end;
+copyfile(dti, dti_x);
+[bvec, bval] = getBVec(desOut);
+dti_x=fullfile(bed_dir, 'bvecs');
+copyfile(bvec, dti_x);
+dti_x=fullfile(bed_dir, 'bvals');
+copyfile(bval, dti_x);
+brainMask = fullfile(pth, 'brain_mask.nii');
+dti_x=fullfile(bed_dir, 'nodif_brain_mask.nii.gz');
+copyfile(brainMask, dti_x);
+if isGpuInstalledSub
+    command=sprintf('bedpostx_gpu "%s" ', bed_dir);
+else
+    command=sprintf('bedpostx "%s" ', bed_dir);
+end
+fslParallelSub;
+doFslCmd (command);
+if ~exist(bed_done,'file')
+    error('Fatal error running bedpostx');
+end
+
 %% Original Functions
 function doDkiTractSub(imgs,matName,dtiDir,atlas)
 global dwi_name
-dki = imgs.DKI;
-[p,~]=fileparts(dki);
+dki = imgs.DWI;
+p = fullfile(fileparts(dki),'PARAMAPS');
 if ~exist('atlas','var'),
     atlas = 'jhu';
 end
@@ -536,28 +573,6 @@ hdr.fname = fname;
 spm_write_vol(hdr,img);
 %end rescaleSub()
 
-function doDkiSub(imgs, matName, isDki)
-global dwi_name
-if exist('isDki','var') && (isDki)
-    %% Insert Designer Test
-    % Control whether or not to run degibbs
-    mm = imgMM(imgs.DWI);
-    if mm > 1.9
-        desParams = '-denoise -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -rpe_none -pe_dir j- -eddy -fit_constraints 0,1,0 -median -DKIparams';
-    else
-        desParams = '-denoise -degibbs -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -rpe_none -pe_dir j- -eddy -fit_constraints 0,1,0 -median -DKIparams';
-    end
-    [fp,~,~] = fileparts(imgs.DWI);
-    command = ['conda activate py37 && python designer.py ' desParams ' ' imgs.DWI ' ' fp];
-    system(command);
-    
-    doFslCmd (command);
-    dwi_name='du';
-else
-    doDkiCoreSub(imgs.T1, imgs.DWI, matName);
-end
-%end doDkiSub()
-
 function doDkiCoreSub(T1, DTI, matName)
 global dwi_name
 if isempty(T1) || isempty(DTI), return; end; %required
@@ -614,72 +629,6 @@ for par=1:length(param)
     fprintf(fid, '%s\n', matName);
     fclose(fid);
 end
-
-
-%MKmask = prepostfixSub('', 'u_ldfDKI_MASK', DTI);
-%MK=prepostfixSub('', 'u_ldfDKI_MK', DTI);
-
-
-%end doDkiCoreSub()
-
-function doFaMdSub(imgs, matName)
-if isempty(imgs.T1) || isempty(imgs.DWI), return; end; %required
-T1 = prefixSub('wb',imgs.T1); %warped brain extracted image
-FA = prepostfixSub('', 'd_FA', imgs.DWI);
-MD = prepostfixSub('', 'd_MD', imgs.DWI);
-if ~exist(T1,'file') || ~exist(FA,'file') || ~exist(MD,'file'), return; end; %required
-global ForceDTI;
-if isempty(ForceDTI) && isFieldSub(matName, 'fa')
-    fprintf('Skipping MD/FA estimates: already computed\n');
-    return;
-end; %skip: previously computed
-FA = unGzSub (FA);
-nii_famask(FA, true); %8/2016: remove speckles at rim of cortex
-MD = unGzSub (MD);
-wFA = prepostfixSub('w', '', FA);
-wMD = prepostfixSub('w', '', MD);
-if ~exist(wFA,'file') || ~exist(wMD,'file')
-    nFA = rescaleSub(FA);
-    %nii_setOrigin12({nFA, FA, MD}, 1,false); %rFA looks like T1
-    oldNormSub( {nFA, FA,MD}, T1, 8, 10 );
-end
-nii_nii2mat(wFA, 'fa', matName); %6
-nii_nii2mat(wMD, 'md', matName); %8
-%end doFaMdSub()
-
-function doDtiSub(imgs)
-if isempty(imgs.T1) || isempty(imgs.DWI), return; end; %required
-betT1 = prefixSub('b',imgs.T1); %brain extracted image
-if ~exist(betT1,'file'), fprintf('doDti unable to find %s\n', betT1); return; end; %required
-eT1 = prefixSub('e',imgs.T1); %enantimorphic image
-if ~exist(eT1,'file'), eT1 = imgs.T1; end; %if no lesion, use raw T1
-if ~exist(eT1,'file'), fprintf('doDti unable to find %s\n', eT1); return; end; %required
-global ForceDTI;
-if isempty(ForceDTI) && isDtiDoneBedpost(imgs), fprintf('Skipping DTI processing (bedpost done)\n'); return; end;
-n = bvalCountSub(imgs.DWI);
-if (n < 1)
-    fprintf('UNABLE TO FIND BVECS/BVALS FOR %s\n', imgs.DWI);
-    return
-end
-if (n < 12)
-    fprintf('INSUFFICIENT BVECS/BVALS FOR %s\n', imgs.DWI);
-    return
-end
-
-% Call designer
-% Control whether or not to run degibbs
-mm = imgMM(imgs.DWI);
-if mm > 1.9
-    desParams = '-denoise -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -fit_constraints 0,1,0 -median -DKIparams -DTIparams';
-else
-    desParams = '-denoise -degibbs -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -fit_constraints 0,1,0 -median -DKIparams -DTIparams';
-end
-[fp,~,~] = fileparts(imgs.DWI);
-command = ['python3 designer.py ' desParams ' ' imgs.DWI ' ' fp];
-[s,t]=system(command,'-echo');
-desOut = fullfile(fp,'dwi_designer.nii');
-doDtiBedpostSub(desOut);
-%end doDtiSub()
 
 function mm = imgMM(fnm)
 %mean voxel size, 2x2x2=2, 2x2x4=2.52
@@ -778,45 +727,6 @@ end
 % command=[command ' ', bed_dir];
 % doFslCmd (command);
 % fprintf ('Bedpost took %f seconds to run.\n', toc(t_start) );
-%end doDtiBedpostSub()
-
-function doDtiBedpostSub(dti) %warp atlas to DTI
-t_start=tic;
-pth = fileparts(dti);
-bed_dirX=fullfile(pth, 'bedpost.bedpostX');
-%if exist(bed_dirX, 'file'), rmdir(bed_dirX, 's'); end; %666 ForceBedpost
-bed_done=fullfile(bed_dirX, 'xfms', 'eye.mat');
-global ForceDTI;
-if isempty(ForceDTI) && exist(bed_done,'file'), fprintf('Skipping bedpost (already done)\n'), return, end;
-if ~exist(bed_dirX, 'file'), mkdir(bed_dirX); end;
-bed_dir=fullfile(pth, 'bedpost');
-%if exist(bed_dir, 'file'), rmdir(bed_dir, 's'); end; %666 ForceBedpost
-if ~exist(bed_dir, 'file'), mkdir(bed_dir); end;
-% dti_u=prepostfixSub('', 'du', dti);
-dti_x=fullfile(bed_dir, 'data.nii.gz');
-if ~exist(dti,'file'), error('Bedpost unable to find %s', dti_u); end;
-copyfile(dti, dti_x);
-[bvec, bval] = getBVec(dti);
-dti_x=fullfile(bed_dir, 'bvecs');
-copyfile(bvec, dti_x);
-dti_x=fullfile(bed_dir, 'bvals');
-copyfile(bval, dti_x);
-brainMask = fullfile(pth, 'brain_mask.nii');
-dti_x=fullfile(bed_dir, 'nodif_brain_mask.nii.gz');
-copyfile(brainMask, dti_x);
-if isGpuInstalledSub
-    command=sprintf('bedpostx_gpu "%s" ', bed_dir);
-else
-    command=sprintf('bedpostx "%s" ', bed_dir);
-end
-fslParallelSub;
-doFslCmd (command);
-if ~exist(bed_done,'file')
-    error('Fatal error running bedpostx');
-end
-%while ~exist(bed_done,'file')
-%    pause(1.0);
-%end
 %end doDtiBedpostSub()
 
 function [bvec, bval] = getBVec(dti)
