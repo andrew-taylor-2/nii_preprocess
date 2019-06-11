@@ -81,7 +81,11 @@ if true
         % DKI or DTI. If DTI, run DTI pipeline. Otherwise if DKI, run DKI
         % pipeline
         if ~isempty(imgs.DWI)
-            doDesigner(imgs);
+            if ~isdesigner(imgs)
+                doDesigner(imgs);
+            else
+                disp('Skipping designer preprocessing');
+            end
         end
         if dwitype(imgs.DWI) == 'DTI'
             doDtiBedpost(imgs);
@@ -96,9 +100,9 @@ if true
     
     if true
         if ~isempty(imgs.DTI)
-            if ~nii_check_dims({imgs.DTI; imgs.DTIrev}), error('Fix DTI'); end;
+            if ~nii_check_dims({imgs.DWI; imgs.DTIrev}), error('Fix DTI'); end;
             imgs = removeDotDtiSub(imgs);
-            dtiDir = fileparts(imgs.DTI);
+            dtiDir = fileparts(imgs.DWI);
             doDtiSub(imgs);
             doFaMdSub(imgs, matName);
             %-->(un)comment next line for JHU tractography
@@ -238,6 +242,24 @@ mkdir(fp);
 command = ['python3 designer.py ' desParams ' ' imgs.DWI ' ' fp];
 [s,t]=system(command,'-echo');
 %end doDesigner()
+
+function check = isdesigner(imgs)
+% Function checks wheter parameter maps exists
+dti = imgs.DWI;
+p = fullfile(fileparts(dti),'PARAMAPS');
+files = dir(fullfile(p,'**/*.nii'));
+for i = 1:length(files)
+    [~,f{i},~] = fileparts(fullfile(files(i).folder,files(i).name));
+end
+refstr = ["md","ad","rd","mk","ak","rk","fa","brain_mask"];
+for i = 1:numel(refstr)
+    n(i) = any(contains(f,refstr{i}));
+end
+if nnz(n) == numel(refstr)
+    check = true;
+else
+    check = false;
+end
 
 function doDtiBedpost(imgs)
 t_start=tic;
