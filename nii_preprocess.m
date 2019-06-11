@@ -78,15 +78,11 @@ if true
     
     if true
         if ~isempty(imgs.DWI)
-            doDwiSub(imgs)
-            if isnifti(imgs.DWI)
-                if ~nii_check_dims({imgs.DTI; imgs.DTIrev}), error('Fix DTI'); end;
-                imgs = removeDotDtiSub(imgs);
-                dtiDir = fileparts(imgs.DTI);
-                doDwiSub(imgs);
-                
-            end
+            doDesigner(imgs.DWI);
         end
+        if dwitype == 'DTI'
+            
+            
     end
     
     
@@ -208,6 +204,39 @@ else
     error('Check bvals')
 end
 %end dwitype()
+
+function doDesigner(imgs)
+% Calls designer on DWI image for preprocessing
+if isempty(imgs.T1) || isempty(imgs.DTI), return; end; %required
+betT1 = prefixSub('b',imgs.T1); %brain extracted image
+if ~exist(betT1,'file'), fprintf('doDti unable to find %s\n', betT1); return; end; %required
+eT1 = prefixSub('e',imgs.T1); %enantimorphic image
+if ~exist(eT1,'file'), eT1 = imgs.T1; end; %if no lesion, use raw T1
+if ~exist(eT1,'file'), fprintf('doDti unable to find %s\n', eT1); return; end; %required
+global ForceDTI;
+if isempty(ForceDTI) && isDtiDoneBedpost(imgs), fprintf('Skipping DTI processing (bedpost done)\n'); return; end;
+n = bvalCountSub(imgs.DTI);
+if (n < 1)
+    fprintf('UNABLE TO FIND BVECS/BVALS FOR %s\n', imgs.DTI);
+    return
+end
+if (n < 12)
+    fprintf('INSUFFICIENT BVECS/BVALS FOR %s\n', imgs.DTI);
+    return
+end
+
+% Call designer
+% Control whether or not to run degibbs
+mm = imgMM(imgs.DTI);
+if mm > 1.9
+    desParams = '-denoise -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -fit_constraints 0,1,0 -median -DKIparams -DTIparams';
+else
+    desParams = '-denoise -degibbs -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -fit_constraints 0,1,0 -median -DKIparams -DTIparams';
+end
+[fp,~,~] = fileparts(imgs.DTI);
+command = ['python3 designer.py ' desParams ' ' imgs.DTI ' ' fp];
+[s,t]=system(command,'-echo');
+%end doDesigner()
 
 %% Original Functions
 function doDkiTractSub(imgs,matName,dtiDir,atlas)
