@@ -5,8 +5,9 @@ function matName = nii_preprocess(imgs, matName, checkForUpdates, hideInteractiv
 % imgs.lesion : lesion map
 % imgs.ASL : pCASL or PASL sequence
 % imgs.Rest : Resting state sequence
-% DTI : Diffusion scan
-% DTIrev : Diffusion scan with reverse phase encoding of 'DTI'
+% imgs.DWI : filename of nifti or folder of dicoms for diffusion-weighted
+% images
+% imgs.DWIrev : reverse phase encoded DWI
 % fMRI : fMRI scan
 %Examples
 % imgs.T1 = 'T1.nii'; imgs.ASL = 'ASL.nii';
@@ -20,13 +21,13 @@ if ~exist('checkForUpdates','var') || checkForUpdates
     checkForUpdate(fileparts(mfilename('fullpath')));
 end
 %nii_check_dependencies;
-if nargin < 1 %, error('Please use nii_preprocess_gui to select images'); 
+if nargin < 1 %, error('Please use nii_preprocess_gui to select images');
     %imgs = 'T1_limegui.mat';
     [f, p] = uigetfile('*limegui.mat', 'Select a mat file');
     imgs = fullfile(p,f);
 end;
-if isempty(spm_figure('FindWin','Graphics')), 
-    spm fmri; 
+if isempty(spm_figure('FindWin','Graphics')),
+    spm fmri;
     %spm_get_defaults('cmdline',true); %enable command line mode in scripts
 end; %launch SPM if it is not running
 %f = spm_figure('FindWin','Graphics'); clf(f.Number); %clear SPM window
@@ -41,11 +42,9 @@ if ~isfield(imgs,'T2'), imgs.T2 = []; end;
 if ~isfield(imgs,'Lesion'), imgs.Lesion = []; end;
 if ~isfield(imgs,'ASL'), imgs.ASL = []; end;
 if ~isfield(imgs,'Rest'), imgs.Rest = []; end;
-if ~isfield(imgs,'DTI'), imgs.DTI = []; end;
-if ~isfield(imgs,'DTIrev'), imgs.DTIrev = []; end;
+if ~isfield(imgs,'DWI'), imgs.DTI = []; end;
+if ~isfield(imgs,'DWIrev'), imgs.DTIrev = []; end;
 if ~isfield(imgs,'fMRI'), imgs.fMRI = []; end;
-if ~isfield(imgs,'DKIrev'), imgs.DKIrev = []; end;
-if ~isfield(imgs,'DKI'), imgs.DKI = []; end;
 
 if ~exist('matName','var') || isempty(matName)
     [p,n] = filepartsSub(imgs.T1);
@@ -76,6 +75,21 @@ if true
     
     tStart = timeSub(tStart,'fMRI');
     %warning('Skipping DTI');
+    
+    if true
+        if ~isempty(imgs.DWI)
+            doDwiSub(imgs)
+            if isnifti(imgs.DWI)
+                if ~nii_check_dims({imgs.DTI; imgs.DTIrev}), error('Fix DTI'); end;
+                imgs = removeDotDtiSub(imgs);
+                dtiDir = fileparts(imgs.DTI);
+                doDwiSub(imgs);
+                
+            end
+        end
+    end
+    
+    
     if true
         if ~isempty(imgs.DTI)
             if ~nii_check_dims({imgs.DTI; imgs.DTIrev}), error('Fix DTI'); end;
@@ -93,14 +107,14 @@ if true
             doDkiSub(imgs, matName);
             tStart = timeSub(tStart,'DTI');
         end
-                if ~isempty(imgs.DKI)
-                dkiDir = fileparts(imgs.DKI);    
-                doDkiSub(imgs, matName, true);
-                %-->(un)comment next line for AICHA tractography
-                %doDkiTractSub(imgs,matName, dkiDir, 'AICHA');
-                %-->(un)comment next line for JHU tractography
-                doDkiTractSub(imgs,matName, dkiDir, 'jhu');
-                end
+        if ~isempty(imgs.DKI)
+            dkiDir = fileparts(imgs.DKI);
+            doDkiSub(imgs, matName, true);
+            %-->(un)comment next line for AICHA tractography
+            %doDkiTractSub(imgs,matName, dkiDir, 'AICHA');
+            %-->(un)comment next line for JHU tractography
+            doDkiTractSub(imgs,matName, dkiDir, 'jhu');
+        end
     end
     tStart = timeSub(tStart,'DKI');
     %matName
@@ -117,7 +131,7 @@ clear global dwi_name
 
 function doDkiTractSub(imgs,matName,dtiDir,atlas)
 global dwi_name
-dki = imgs.DKI; 
+dki = imgs.DKI;
 [p,~]=fileparts(dki);
 if ~exist('atlas','var'),
     atlas = 'jhu';
@@ -126,10 +140,10 @@ end
 if strcmpi(atlas,'jhu')
     atlasext = '';
 else
-   atlasext = ['_' atlas];
+    atlasext = ['_' atlas];
 end
 
- if ~exist(prepostfixSub('',['_roi' atlasext],dki)), doDkiWarpSub(imgs, atlas), end
+if ~exist(prepostfixSub('',['_roi' atlasext],dki)), doDkiWarpSub(imgs, atlas), end
 dki_dt=fullfile(p,[dwi_name '_DT.nii']);
 dki_kt=fullfile(p,[dwi_name '_DK.nii']);
 dki_fa=fullfile(p,[dwi_name '_fa_dki.nii']);
@@ -137,10 +151,10 @@ dki_fa=fullfile(p,[dwi_name '_fa_dki.nii']);
 if ~exist(dki_kt,'file')
     fprintf('Can not find tensors %s\n',dki_kt);
     return;
-end   
-% make parameters file for kODF_nii_preprocess 
+end
+% make parameters file for kODF_nii_preprocess
 fid=fopen(fullfile(fileparts(mfilename('fullpath')),'DKI_tractography','ft_parameters.txt')); % original ft_parameters in nii_preprocess
-fout=fullfile(dtiDir,'ft_parameters_subj.txt'); % new ft_parameters 
+fout=fullfile(dtiDir,'ft_parameters_subj.txt'); % new ft_parameters
 fidout=fopen(fout,'w');
 
 while(~feof(fid))
@@ -155,8 +169,8 @@ fclose(fid);
 fclose(fidout);
 
 kODF_nii_preprocess(fullfile(dtiDir,'ft_parameters_subj.txt'),dki_dt,dki_kt,dki_fa)
-param={'fa','md','dax','drad','mk','kax','krad','kfa'}; % calculate along tract stats of these metrics 
-DKI_tractography_along_tract_stats_2(imgs,atlas,100,param) % devide tracts in 100 nodes 
+param={'fa','md','dax','drad','mk','kax','krad','kfa'}; % calculate along tract stats of these metrics
+DKI_tractography_along_tract_stats_2(imgs,atlas,100,param) % devide tracts in 100 nodes
 
 
 function addLimeVersionSub(matName)
@@ -270,11 +284,11 @@ global ForcefMRI; %e.g. user can call "global ForcefMRI;  ForcefMRI = true;"
 if isempty(ForcefMRI) && isFieldSub(matName, 'fmri'), fprintf('Skipping fMRI (already done) %s\n',imgs.fMRI); return;  end;
 if ~exist(imgs.fMRI,'file'), warning('Unable to find %s', imgs.fMRI); return; end;
 %if ~isempty(ForcefMRI)
-    d = fullfile(p,n);
-    if exist(d,'file'), rmdir(d,'s'); end; %delete statistics directory
-    delImgs('sw', imgs.fMRI);
-    delMat(imgs.fMRI)
-    %delImgs('swa', imgs.fMRI); %we never slice-time correct sparse data!
+d = fullfile(p,n);
+if exist(d,'file'), rmdir(d,'s'); end; %delete statistics directory
+delImgs('sw', imgs.fMRI);
+delMat(imgs.fMRI)
+%delImgs('swa', imgs.fMRI); %we never slice-time correct sparse data!
 %end
 if ~exist('nii_fmri60.m','file')
     fnm = fullfile(fileparts(which(mfilename)), 'nii_fmri');
@@ -384,16 +398,16 @@ if isempty(nam), return; end;
 [p, n, x] = filepartsSub(nam);
 nam = fullfile(p, [pre, n, post, x]);
 if ~exist(nam, 'file') && strcmpi(x,'.nii')
-   nam = fullfile(p, [pre, n, post, '.nii.gz']);
-   if ~exist(nam, 'file')
+    nam = fullfile(p, [pre, n, post, '.nii.gz']);
+    if ~exist(nam, 'file')
         nam = fullfile(p, [pre, n, post, x]);
-   end
+    end
 end
 if ~exist(nam, 'file') && strcmpi(x,'.nii.gz')
-   nam = fullfile(p, [pre, n, post, '.nii']);
-   if ~exist(nam, 'file')
+    nam = fullfile(p, [pre, n, post, '.nii']);
+    if ~exist(nam, 'file')
         nam = fullfile(p, [pre, n, post, x]);
-   end
+    end
 end
 %end prepostfixSub()
 
@@ -414,18 +428,18 @@ spm_write_vol(hdr,img);
 function doDkiSub(imgs, matName, isDki)
 global dwi_name
 if exist('isDki','var') && (isDki)
-%% Insert Designer Test
-% Control whether or not to run degibbs
-mm = imgMM(imgs.DTI);
-if mm > 1.9
-    desParams = '-denoise -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -rpe_none -pe_dir j- -eddy -fit_constraints 0,1,0 -median -DKIparams';
-else
-    desParams = '-denoise -degibbs -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -rpe_none -pe_dir j- -eddy -fit_constraints 0,1,0 -median -DKIparams';
-end
-[fp,~,~] = fileparts(imgs.DTI);
-command = ['conda activate py37 && python designer.py ' desParams ' ' imgs.DTI ' ' fp];
-system(command);
-     
+    %% Insert Designer Test
+    % Control whether or not to run degibbs
+    mm = imgMM(imgs.DTI);
+    if mm > 1.9
+        desParams = '-denoise -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -rpe_none -pe_dir j- -eddy -fit_constraints 0,1,0 -median -DKIparams';
+    else
+        desParams = '-denoise -degibbs -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -rpe_none -pe_dir j- -eddy -fit_constraints 0,1,0 -median -DKIparams';
+    end
+    [fp,~,~] = fileparts(imgs.DTI);
+    command = ['conda activate py37 && python designer.py ' desParams ' ' imgs.DTI ' ' fp];
+    system(command);
+    
     doFslCmd (command);
     dwi_name='du';
 else
@@ -465,29 +479,29 @@ MKmask=mask;
 
 if ~exist(wbT1,'file'), error('unable to find %s',wbT1); end;
 if ~exist([dwi_name '_' param{1} '_dki.nii'], 'file') || ~exist(MKmask, 'file')
-   fprintf('Serious error: no kurtosis images named %s %s\n', [dwi_name '_' param{1} '_dki.nii'], MKmask);
-   return;
+    fprintf('Serious error: no kurtosis images named %s %s\n', [dwi_name '_' param{1} '_dki.nii'], MKmask);
+    return;
 end
-    
+
 nFA = rescaleSub([pth '/' dwi_name '_' param{1} '_dki.nii']);
 
 oldNormstring=cell(1,length(param)+1);
 oldNormstring{1}=nFA;
 for par=1:length(param)
-DKI_par=[pth '/' dwi_name '_' param{par} '_dki.nii'];
-oldNormstring(par+1)={DKI_par};
+    DKI_par=[pth '/' dwi_name '_' param{par} '_dki.nii'];
+    oldNormstring(par+1)={DKI_par};
 end
 oldNormSub(oldNormstring,wbT1, 8, 8 );
 
 for par=1:length(param)
-DKI_par=[pth '/' dwi_name '_' param{par} '_dki.nii'];
-%normalize mean kurtosis to match normalized, brain extracted T1
-wDKI_par = prepostfixSub('w', '', DKI_par);
-nii_nii2mat(wDKI_par, [param{par} '_dki'], matName);
-%save note
-fid = fopen('dki.txt', 'a+');
-fprintf(fid, '%s\n', matName);
-fclose(fid);        
+    DKI_par=[pth '/' dwi_name '_' param{par} '_dki.nii'];
+    %normalize mean kurtosis to match normalized, brain extracted T1
+    wDKI_par = prepostfixSub('w', '', DKI_par);
+    nii_nii2mat(wDKI_par, [param{par} '_dki'], matName);
+    %save note
+    fid = fopen('dki.txt', 'a+');
+    fprintf(fid, '%s\n', matName);
+    fclose(fid);
 end
 
 
@@ -540,23 +554,8 @@ if (n < 12)
     fprintf('INSUFFICIENT BVECS/BVALS FOR %s\n', imgs.DTI);
     return
 end
-% %preprocess - denoise
-% dti_d=prepostfixSub('', 'd', imgs.DTI);
-% if exist(imgs.DTIrev)
-%     dti_dr=prepostfixSub('', 'd', imgs.DTI);
-% end;
-% if isempty(ForceDTI) && exist(dti_d, 'file')
-%    fprintf('Skipping DTI denoising: found %s\n', dti_d);
-% else
-%     mm = imgMM(imgs.DTI);
-%     degibbs = (mm > 1.9); %partial fourier used for HCP 1.5mm isotropic images
-%     dti_d = nii_dwidenoise (imgs.DTI, degibbs);
-%     if exist(imgs.DTIrev)
-%         dti_dr = nii_dwidenoise (imgs.DTIrev, degibbs);
-%     end;
-% end;
 
-%% Insert Designer Test
+% Call designer
 % Control whether or not to run degibbs
 mm = imgMM(imgs.DTI);
 if mm > 1.9
@@ -567,42 +566,6 @@ end
 [fp,~,~] = fileparts(imgs.DTI);
 command = ['python3 designer.py ' desParams ' ' imgs.DTI ' ' fp];
 [s,t]=system(command,'-echo');
-
-% %% ---------
-% % %preprocess - eddy
-% dti_u=prepostfixSub('', 'du', imgs.DTI);
-% if isempty(ForceDTI) && exist(dti_u, 'file')
-%     fprintf('Skipping DTI preprocessing: found %s\n', dti_u);
-% else
-%     clipSub (imgs); %topup requires images with even dimensions
-%     %1 - eddy current correct
-%     %2017: dti_1_eddy_cuda now auto-detects if cuda is installed
-%     %if isEddyCuda7Sub()
-%     %9/2017: always use Eddy
-%     %if isFullSphereSub(imgs.DTI)
-%     if HalfSphere(imgs.DTI)
-%         command= [fileparts(which(mfilename)) filesep 'dti_1_eddy_cuda_half.sh'];
-%     
-%     else
-%         command= [fileparts(which(mfilename)) filesep 'dti_1_eddy_cuda.sh'];
-%     end;
-%     %else
-%     %    command= [fileparts(which(mfilename)) filesep 'dti_1_eddy_correct.sh'];
-%     %end
-%     %else
-%     %    command= [fileparts(which(mfilename)) filesep 'dti_1_eddy.sh'];
-%     %end
-%     if isempty(imgs.DTIrev)
-%         command=sprintf('%s "%s"',command, dti_d);
-%     else
-%         nr = bvalCountSub(dti_dr);
-%         if (nr ~= n)
-%             fprintf('WARNING: BVECS/BVALS DO NOT MATCH %s %s\n', dti_d, dti_dr);
-%             %return
-%         end
-%         command=sprintf('%s "%s" "%s"',command, dti_d, dti_dr);
-%     end
-%     cleanupDtiDir(imgs.DTI);
 desOut = fullfile(fp,'dwi_designer.nii');
 doDtiBedpostSub(desOut);
 %end doDtiSub()
@@ -652,16 +615,20 @@ imgDir = dir(fullfile(imgPath,'**/*.dcm'));
 for i = 1:length(imgDir)
     [~,~,xVec{i}] = fileparts(fullfile(imgDir(i).folder,imgDir(i).name));
 end
-xVec(find(startsWith(xVec,'.'))) = [];
-x = unique(xVec);
-if numel(x) == 1 && x == '.dcm'
-    check = true;
-else
+if ~exist('xVec','var')
     check = false;
+    return
+else
+    x = unique(xVec);
+    if numel(x) == 1 && contains(x{1},'dcm')
+        check = true;
+    else
+        check = false;
+    end
 end
 %end isdicom()
 
-%{ 
+%{
 function done = isDtiDone(imgs)
 done = false;
 if isempty(imgs.DTI), return; end;
@@ -818,7 +785,7 @@ template_roiW=prepostfixSub('', '_roi', dti);
 if exist(template_roiW,'file') && strcmpi(atlas,'jhu')
     atlasext = '';
 else
-   atlasext = ['_' atlas];
+    atlasext = ['_' atlas];
 end
 template_roiW=prepostfixSub('', ['_roi', atlasext], dti);
 dti_faThr=prepostfixSub('', 'd_FA_thr', dti);
@@ -854,28 +821,28 @@ for i = 1: nROI
     maski=fullfile(mask_dir, [num2str(i),'.nii']);
     hdr.fname = maski;
     spm_write_vol(hdr,imgi);
-
+    
     %command=sprintf('fslstats "%s" -M',  maski);
     %[~,cmdout] = doFslCmd (command, i == 1); %only show text for 1st region
     %if str2num(cmdout) < 1.0  %#ok<ST2NM>
     %    %delete(maski);
     %else
-        prob_diri=fullfile(prob_dir, num2str(i));
-        if exist(prob_diri, 'file'), rmdir(prob_diri, 's'); end;
-        mkdir(prob_diri);
-        if isGpuInstalledSub()
-            exeName=sprintf('probtrackx2_gpu');
-        else
-            exeName=sprintf('probtrackx2');
-        end
-        command=sprintf('%s -x "%s" --dir="%s" --forcedir  -P %d -s "%s" -m "%s" --opd --pd -l -c 0.2 --distthresh=0', ...
-            exeName, maski, prob_diri, nPerm ,bed_merged, bed_mask );
-        commands = [commands {command}]; %#ok<AGROW>
+    prob_diri=fullfile(prob_dir, num2str(i));
+    if exist(prob_diri, 'file'), rmdir(prob_diri, 's'); end;
+    mkdir(prob_diri);
+    if isGpuInstalledSub()
+        exeName=sprintf('probtrackx2_gpu');
+    else
+        exeName=sprintf('probtrackx2');
+    end
+    command=sprintf('%s -x "%s" --dir="%s" --forcedir  -P %d -s "%s" -m "%s" --opd --pd -l -c 0.2 --distthresh=0', ...
+        exeName, maski, prob_diri, nPerm ,bed_merged, bed_mask );
+    commands = [commands {command}]; %#ok<AGROW>
     %end %if voxels survive
 end %for each region
 if numel(commands) < 1
-   fprintf('No regions survive thresholding with FA (poor normalization?) %s', dti);
-   return;
+    fprintf('No regions survive thresholding with FA (poor normalization?) %s', dti);
+    return;
 end
 fprintf ('computing probtrackx for %d regions (this may take a while)\n',numel(commands) );
 doThreads(commands, prob_dir);
@@ -940,17 +907,17 @@ if ~exist('atlas','var'), atlas = 'jhu'; end;
 if strcmpi(atlas,'jhu')
     atlasext = '_roi';
 else
-   atlasext = ['_roi_' atlas];
+    atlasext = ['_roi_' atlas];
 end
 T1 = prefixSub('wb',imgs.T1); %warped brain extracted image
-[fp,~,~] = fileparts(imgs.DTI);
-FA = prepostfixSub('', 'd_FA', imgs.DTI);
-MD = prepostfixSub('', 'd_MD', imgs.DTI);
+[p,~,~] = fileparts(imgs.DTI);
+FA = fullfile(p,'fa.nii');
+MD = fullfile(p,'md.nii');
 if ~exist(T1,'file') fprintf('Unable to find image: %s\n',T1); return; end; %required
 if ~exist(FA,'file') error('Unable to find image: %s\n',FA); return; end; %required
 if ~exist(MD,'file') error('Unable to find image: %s\n',MD); return; end; %required
-FA = unGzSub (FA);
-MD = unGzSub (MD);
+% FA = unGzSub (FA);
+% MD = unGzSub (MD);
 nFA = rescaleSub(FA);
 atlasImg = fullfile(fileparts(which('NiiStat')), 'roi' , [atlas '.nii']);
 if ~exist(atlasImg,'file')
@@ -983,7 +950,7 @@ if ~exist('atlas','var'), atlas = 'jhu'; end;
 if strcmpi(atlas,'jhu')
     atlasext = '_roi';
 else
-   atlasext = ['_roi_' atlas];
+    atlasext = ['_roi_' atlas];
 end
 T1 = prefixSub('wb',imgs.T1); %warped brain extracted image
 [p,~]=fileparts(imgs.DKI);
@@ -1020,11 +987,11 @@ delete(roiname);
 wroiname = prepostfixSub('w', atlasext, imgs.DKI);
 movefile(wroiname, roiname);
 
-if ~isempty(imgs.Lesion) % transform lesion into native diffusion space 
-lesionname_DKI=prepostfixSub('', '_lesion', imgs.DKI);
-lesionname_MNI=prepostfixSub('wsr', '', imgs.Lesion);
-oldNormSub({T1,lesionname_MNI},nFA,8,10,0);
-movefile(prepostfixSub('wwsr', '', imgs.Lesion),lesionname_DKI);
+if ~isempty(imgs.Lesion) % transform lesion into native diffusion space
+    lesionname_DKI=prepostfixSub('', '_lesion', imgs.DKI);
+    lesionname_MNI=prepostfixSub('wsr', '', imgs.Lesion);
+    oldNormSub({T1,lesionname_MNI},nFA,8,10,0);
+    movefile(prepostfixSub('wwsr', '', imgs.Lesion),lesionname_DKI);
 end
 
 
@@ -1106,7 +1073,7 @@ fnm = which('spm_create_vol');
 txt = fileread(fnm);
 badStr = '%try, N.timing = V.private.timing; end';
 if ~isempty(strfind(txt,badStr))
-   error('Please uncomment "%s" from "%s"', badStr, fnm);
+    error('Please uncomment "%s" from "%s"', badStr, fnm);
 end
 %make sure the user had the correct version of fsl_sub
 fsldir = fslDirSub;
@@ -1115,7 +1082,7 @@ if ~exist(fnm,'file'), error('%s required', fnm); end;
 txt = fileread(fnm);
 goodStr = '_gpu';
 if isempty(strfind(txt,goodStr))
-   error('Please overwrite "%s" with file from https://github.com/neurolabusc/fsl_sub', fnm);
+    error('Please overwrite "%s" with file from https://github.com/neurolabusc/fsl_sub', fnm);
 end
 %make sure eddy supports repol
 cmd = fullfile(fsldir, 'bin', 'eddy_openmp');
@@ -1124,7 +1091,7 @@ cmd = fslCmdSub(cmd);
 [~,cmdout]  = system(cmd);
 goodStr = '--repol';
 if isempty(strfind(cmdout,goodStr))
-   error('Update eddy files to support "repol" https://fsl.fmrib.ox.ac.uk/fsldownloads/patches/eddy-patch-fsl-5.0.9/centos6/');
+    error('Update eddy files to support "repol" https://fsl.fmrib.ox.ac.uk/fsldownloads/patches/eddy-patch-fsl-5.0.9/centos6/');
 end
 %end nii_check_dependencies()
 
@@ -1143,7 +1110,7 @@ fsldir = fslDirSub;
 curpath = getenv('PATH');
 k = strfind(curpath, fsldir);
 if isempty(k)
-	setenv('PATH',sprintf('%s:%s',fullfile(fsldir,'bin'),curpath));
+    setenv('PATH',sprintf('%s:%s',fullfile(fsldir,'bin'),curpath));
 end
 %end fslEnvSub()
 
@@ -1163,10 +1130,10 @@ if verbose
     fprintf('Running \n %s\n', cmd);
     [status,cmdout]  = system(cmd,'-echo');
 else
-  [status,cmdout]  = system(cmd);
+    [status,cmdout]  = system(cmd);
 end
 if status ~= 0
-   warning('doFslCmd error %s\n', command); 
+    warning('doFslCmd error %s\n', command);
 end
 %end doFslCmd()
 
@@ -1218,8 +1185,8 @@ fclose(fileID);
 %check that number of elements in bval matches nifti!
 if n < 2, return; end;
 if strcmpi(ext,'.nii')
-   h = spm_vol(fnm);
-   if numel(h) ~= n, error('Number of volumes does not match "%s" "%s"', fnm, bnm); end;
+    h = spm_vol(fnm);
+    if numel(h) ~= n, error('Number of volumes does not match "%s" "%s"', fnm, bnm); end;
 end
 %end bvalCountSub()
 
@@ -1291,8 +1258,8 @@ delMat(imgs.ASL);
 [nV, nSlices] = nVolSub (imgs.ASL) ;
 [mx, ind] = max(nV);
 if (mod(mx,2) == 0) && ( (nSlices ~= 17) && (nSlices ~= 16))
-	fprintf('Error: nii_pasl12 only designed for pCASL sequences with 17 or 16 slices not %d: %s\n', nSlices);
-	return;
+    fprintf('Error: nii_pasl12 only designed for pCASL sequences with 17 or 16 slices not %d: %s\n', nSlices);
+    return;
 end
 if mx < 60,
     fprintf('not enough ASL volumes (only %d volumes with %d slices) for %s\n', nV, nSlices, imgs.ASL);
@@ -1446,9 +1413,9 @@ m = spm_read_vols(mi);
 g = spm_read_vols(gi);
 w = spm_read_vols(wi);
 if nargin > 4 && ~isempty(c3)
-   ci = spm_vol(c3);%CSF map
-   c = spm_read_vols(ci);
-   w = c+w;
+    ci = spm_vol(c3);%CSF map
+    c = spm_read_vols(ci);
+    w = c+w;
 end;
 w = g+w;
 if thresh <= 0
@@ -1456,9 +1423,9 @@ if thresh <= 0
 else
     mask= zeros(size(m));
     for px=1:length(w(:)),
-      if w(px) >= thresh
-        mask(px) = 255;
-      end;
+        if w(px) >= thresh
+            mask(px) = 255;
+        end;
     end;
     spm_smooth(mask,mask,1); %feather the edges
     mask = mask / 255;
@@ -1513,12 +1480,12 @@ if exist(oldfnm, 'file') %if a script is re-run, return the corrected name
 end;
 %Taylor Hanayik added for .bvec and .bval 'un'dotting
 %if isDTI
-    if exist(fullfile(p,[n, '.bvec']), 'file')
-        movefile(fullfile(p,[n, '.bvec']), fullfile(p,[nn, '.bvec']));
-    end
-    if exist(fullfile(p,[n, '.bval']), 'file')
-        movefile(fullfile(p,[n, '.bval']), fullfile(p,[nn, '.bval']));
-    end
+if exist(fullfile(p,[n, '.bvec']), 'file')
+    movefile(fullfile(p,[n, '.bvec']), fullfile(p,[nn, '.bvec']));
+end
+if exist(fullfile(p,[n, '.bval']), 'file')
+    movefile(fullfile(p,[n, '.bval']), fullfile(p,[nn, '.bval']));
+end
 %end
 %end removeDotSub
 
@@ -1546,11 +1513,11 @@ if strcmpi(ext,'.nii') %.nii.gz
 end
 fnmN = [fnm, '.nii'];
 if exist(fnmN,'file')
-  delete(fnmN);
+    delete(fnmN);
 end
 fnmZ = [fnm, '.nii.gz'];
 if exist(fnmZ,'file')
-  delete(fnmZ);
+    delete(fnmZ);
 end
 %
 function [fnm, isGz] = unGzCSub (fnm)
@@ -1612,7 +1579,7 @@ for i=1:size(nameFiles,1)
     pos = isStringInKey (nameFiles(i), imgKey);
     if pos == 1 && isImgSub(char(nameFiles(i)))
         imgName = strvcat(imgName, [inDir, filesep, char(nameFiles(i))]);
-
+        
     end; %do not worry about bvec/bval
 end
 if isempty(imgName), fprintf('WARNING: unable to find any "%s" images in folder %s\n',deblank(imgKey(1,:)), inDir); end;
@@ -1687,8 +1654,8 @@ if ~isempty(ind)
     ext = ext(1:(ind(1)-1));
 end
 if strcmpi(ext,'.gz')
-   [pth nam ext] = fileparts(fullfile(pth, nam));
-   ext = [ext, '.gz'];
+    [pth nam ext] = fileparts(fullfile(pth, nam));
+    ext = [ext, '.gz'];
 end
 %end filepartsSub()
 
@@ -1711,10 +1678,10 @@ function isHalfSphere = HalfSphere(bvec_nam)
 %Example
 % HalfSphere('dki.bvec')
 if ~exist('bvec_nam','var') %file not specified
-   fprintf('Select b-vec file\n');
-   [A,Apth] = uigetfile({'*.bvec'},'Select b-vec file');
-   if isnumeric(A), return; end; %nothing selected
-   bvec_nam = strcat(Apth,char(A));
+    fprintf('Select b-vec file\n');
+    [A,Apth] = uigetfile({'*.bvec'},'Select b-vec file');
+    if isnumeric(A), return; end; %nothing selected
+    bvec_nam = strcat(Apth,char(A));
 end;
 % %handle different extensions bvec/nii/nii.gz
 [p,n,x]=fileparts(bvec_nam);
@@ -1730,7 +1697,7 @@ if ~strcmpi(x,'.bvec')
     bvec_nam = fnm;
 end
 isHalfSphere = false;
-bvecs = load(bvec_nam); 
+bvecs = load(bvec_nam);
 bvecs = unitLengthSub(bvecs)';
 bvecs(~any(~isnan(bvecs')),:) = [];
 if isempty(bvecs), return; end;
@@ -1745,9 +1712,9 @@ if thetaInDegrees < 110
 end;
 %end HalfSphere()
 
-function Xu = unitLengthSub(X) 
+function Xu = unitLengthSub(X)
 %Use pythagorean theorem to set all vectors to have length 1
-%does not require statistical toolbox 
+%does not require statistical toolbox
 if size(X,1) ~= 3, error('expected each column to have three rows (X,Y,Z coordinates)'); end;
 Dx =  sqrt(sum((X.^2)));
 Dx = [Dx; Dx; Dx];
