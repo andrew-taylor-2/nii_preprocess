@@ -84,7 +84,7 @@ if true
             if ~isdesigner(imgs)
                 doDesigner(imgs);
             else
-                disp('Skipping designer preprocessing');
+                disp('Parameter maps already present, skipping designer preprocessing');
             end
         end
         if dwitype(imgs.DWI) == 'DTI'
@@ -297,6 +297,10 @@ doFslCmd (command);
 if ~exist(bed_done,'file')
     error('Fatal error running bedpostx');
 end
+
+function path = designerPath(imgPath)
+path = fullfile(fileparts(imgPath),'PARAMAPS')
+%end designerPath()
 
 %% Original Functions
 function doDkiTractSub(imgs,matName,dtiDir,atlas)
