@@ -237,7 +237,7 @@ if isempty(ForceDTI) && isDtiDoneBedpost(imgs), fprintf('Skipping DTI processing
 %     return
 % end
 desParams = '-denoise -degibbs -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -fit_constraints 0,1,0 -median -DKIparams -DTIparams';
-fp = fullfile(fileparts(imgs.DWI),'PARAMAPS');
+fp = mapspath(imgs.DWI);
 mkdir(fp);
 command = ['python3 designer.py ' desParams ' ' imgs.DWI ' ' fp];
 [s,t]=system(command,'-echo');
@@ -246,7 +246,7 @@ command = ['python3 designer.py ' desParams ' ' imgs.DWI ' ' fp];
 function check = isdesigner(imgs)
 % Function checks wheter parameter maps exists
 dti = imgs.DWI;
-p = fullfile(fileparts(dti),'PARAMAPS');
+p = mapspath(dti);
 files = dir(fullfile(p,'**/*.nii'));
 for i = 1:length(files)
     [~,f{i},~] = fileparts(fullfile(files(i).folder,files(i).name));
@@ -264,7 +264,7 @@ end
 function doDtiBedpost(imgs)
 t_start=tic;
 dti = imgs.DWI;
-pth = fullfile(fileparts(dti),'PARAMAPS');
+pth = mapspath(dti);
 desOut = fullfile(pth,'dwi_designer.nii');
 bed_dirX=fullfile(pth, 'bedpost.bedpostX');
 %if exist(bed_dirX, 'file'), rmdir(bed_dirX, 's'); end; %666 ForceBedpost
@@ -298,8 +298,8 @@ if ~exist(bed_done,'file')
     error('Fatal error running bedpostx');
 end
 
-function path = designerPath(imgPath)
-path = fullfile(fileparts(imgPath),'PARAMAPS')
+function path = mapspath(imgPath)
+path = fullfile(fileparts(imgPath),'PARAMAPS');
 %end designerPath()
 
 %% Original Functions
