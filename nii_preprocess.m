@@ -88,9 +88,12 @@ if true
             end
         end
         if dwitype(imgs.DWI) == 'DTI'
+            dtiDir = fileparts(imgs.DWI);
             doDtiBedpost(imgs);
+            doDtiTractSub(imgs, matName, dtiDir, 'jhu');
+            doDtiTractSub(imgs, matName, dtiDir, 'AICHA');
         elseif dwitype(imgs.DWI) == 'DKI'
-%             doDkiSub(imgs, matName)
+            %             doDkiSub(imgs, matName)
         else
             error('Unable to determine DWI type');
             
@@ -237,7 +240,7 @@ if isempty(ForceDTI) && isDtiDoneBedpost(imgs), fprintf('Skipping DTI processing
 %     return
 % end
 desParams = '-denoise -degibbs -extent 5,5,5 -rician -mask -prealign -smooth 1.25 -fit_constraints 0,1,0 -median -DKIparams -DTIparams';
-fp = mapspath(imgs.DWI);
+[fp,~] = mapspath(imgs.DWI);
 mkdir(fp);
 command = ['python3 designer.py ' desParams ' ' imgs.DWI ' ' fp];
 [s,t]=system(command,'-echo');
@@ -246,25 +249,30 @@ command = ['python3 designer.py ' desParams ' ' imgs.DWI ' ' fp];
 function check = isdesigner(imgs)
 % Function checks wheter parameter maps exists
 dti = imgs.DWI;
-p = mapspath(dti);
+[p,~] = mapspath(dti);
 files = dir(fullfile(p,'**/*.nii'));
 for i = 1:length(files)
     [~,f{i},~] = fileparts(fullfile(files(i).folder,files(i).name));
 end
 refstr = ["md","ad","rd","mk","ak","rk","fa","brain_mask"];
-for i = 1:numel(refstr)
-    n(i) = any(contains(f,refstr{i}));
-end
-if nnz(n) == numel(refstr)
-    check = true;
-else
+if ~exist('f','var')
     check = false;
+    return
+else
+    for i = 1:numel(refstr)
+        n(i) = any(contains(f,refstr{i}));
+    end
+    if nnz(n) == numel(refstr)
+        check = true;
+    else
+        check = false;
+    end
 end
 
 function doDtiBedpost(imgs)
 t_start=tic;
 dti = imgs.DWI;
-pth = mapspath(dti);
+[pth,~] = mapspath(dti);
 desOut = fullfile(pth,'dwi_designer.nii');
 bed_dirX=fullfile(pth, 'bedpost.bedpostX');
 %if exist(bed_dirX, 'file'), rmdir(bed_dirX, 's'); end; %666 ForceBedpost
@@ -298,9 +306,11 @@ if ~exist(bed_done,'file')
     error('Fatal error running bedpostx');
 end
 
-function path = mapspath(imgPath)
+function [path, nii] = mapspath(imgPath)
 path = fullfile(fileparts(imgPath),'PARAMAPS');
+nii = fullfile(fileparts(imgPath),'PARAMAPS','dwi_designer.nii');
 %end designerPath()
+
 
 %% Original Functions
 function doDkiTractSub(imgs,matName,dtiDir,atlas)
@@ -783,7 +793,7 @@ if ~exist('atlas','var'),
 end;
 if isempty(ForceDTI) &&   isFieldSub(matName, ['dti_' atlas]), fprintf('Skipping tractography (DTI already computed) %s\n', imgs.ASL); return; end;
 doDtiWarpSub(imgs, atlas); %warp atlas to DTI
-pth = fileparts(dti);
+[pth,nii] = mapspath(dti);
 bed_dir=fullfile(pth, 'bedpost');
 bed_dirX=fullfile(pth, 'bedpost.bedpostX');
 bed_merged=fullfile(bed_dirX, 'merged');
@@ -792,29 +802,29 @@ if ~exist(bed_dir,'file') || ~exist(bed_dirX,'file')
     fprintf('Please run bedpost to create files %s %s\n',bed_dir, bed_dirX);
     return;
 end
-dti_u=prepostfixSub('', 'du', dti);
+dti_u=nii;
 if ~exist(dti_u,'file')
     fprintf('Can not find undistorted DTI %s\n',dti_u);
     return;
 end
-template_roiW=prepostfixSub('', '_roi', dti);
+template_roiW=prepostfixSub('', '_roi', nii);
 if exist(template_roiW,'file') && strcmpi(atlas,'jhu')
     atlasext = '';
 else
     atlasext = ['_' atlas];
 end
-template_roiW=prepostfixSub('', ['_roi', atlasext], dti);
-dti_faThr=prepostfixSub('', 'd_FA_thr', dti);
+template_roiW=prepostfixSub('', ['_roi', atlasext], nii);
+dti_faThr=fullfile(pth,'fa.nii');
 mask_dir=fullfile(pth, ['masks', atlasext]);
 if ~exist(template_roiW,'file') || ~exist(dti_u,'file') || ~exist(dti_faThr,'file')
     error('doDtiTractSub Can not find %s or %s or %s\n',template_roiW, dti_u, dti_faThr);
     return;
 end
-template_roiWThr=prepostfixSub('', ['_roi_thr', atlasext], dti);
+template_roiWThr=prepostfixSub('', ['_roi_thr', atlasext], nii);
 command=sprintf('fslmaths "%s" -mas "%s" "%s"',template_roiW, dti_faThr, template_roiWThr);
 fprintf('Creating thresholded image %s\n', template_roiWThr);
 doFslCmd (command);
-template_roiWThr=prepostfixSub('', ['_roi_thr', atlasext], dti);
+template_roiWThr=prepostfixSub('', ['_roi_thr', atlasext], nii);
 fprintf('PROBTRACKX: Create seed data\n');
 if ~exist(mask_dir, 'file'), mkdir(mask_dir); end;
 nROI = nRoiSub(template_roiWThr);
@@ -926,7 +936,7 @@ else
     atlasext = ['_roi_' atlas];
 end
 T1 = prefixSub('wb',imgs.T1); %warped brain extracted image
-[p,~,~] = fileparts(imgs.DWI);
+[p,nii] = mapspath(imgs.DWI);
 FA = fullfile(p,'fa.nii');
 MD = fullfile(p,'md.nii');
 if ~exist(T1,'file') fprintf('Unable to find image: %s\n',T1); return; end; %required
@@ -940,7 +950,7 @@ if ~exist(atlasImg,'file')
     error('Unable to find template %s', atlasImg);
 end
 [outhdr, outimg] = nii_reslice_target(atlasImg, '', T1, 0) ;
-roiname = prepostfixSub('', atlasext, imgs.DWI);
+roiname = prepostfixSub('', atlasext, nii);
 global ForceDTI;
 if isempty(ForceDTI) && ~strcmpi(atlas,'jhu') &&  exist(roiname,'file')
     fprintf('Skipping doDtiWarpSub: file exists %s\n', roiname);
@@ -948,14 +958,14 @@ if isempty(ForceDTI) && ~strcmpi(atlas,'jhu') &&  exist(roiname,'file')
 end
 if exist(roiname,'file') %e.g. FSL made .nii.gz version
     delete(roiname);
-    roiname = prepostfixSub('', atlasext, imgs.DWI);
+    roiname = prepostfixSub('', atlasext, nii);
 end
 roiname = unGzNameSub(roiname);
 outhdr.fname = roiname;
 spm_write_vol(outhdr,outimg);
 oldNormSub({T1, roiname}, nFA, 8, 10, 0 );
 delete(roiname);
-wroiname = prepostfixSub('w', atlasext, imgs.DWI);
+wroiname = prepostfixSub('w', atlasext, nii);
 movefile(wroiname, roiname);
 %end doFaMdSub()
 
