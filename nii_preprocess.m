@@ -823,7 +823,7 @@ else
 end
 template_roiW=prepostfixSub('', ['_roi', atlasext], nii);
 FA = fullfile(pth,'fa.nii');
-dti_faThr=prepostfixSub('', '_thr', nii);
+dti_faThr=prepostfixSub('', '_thr', FA);
 mask_dir=fullfile(pth, ['masks', atlasext]);
 if ~exist(template_roiW,'file') || ~exist(dti_u,'file') || ~exist(dti_faThr,'file')
     error('doDtiTractSub Can not find %s or %s or %s\n',template_roiW, dti_u, dti_faThr);
