@@ -244,6 +244,7 @@ desParams = '-denoise -degibbs -extent 5,5,5 -rician -mask -prealign -smooth 1.2
 mkdir(fp);
 command = ['python3 designer.py ' desParams ' ' imgs.DWI ' ' fp];
 [s,t]=system(command,'-echo');
+dofaprocess(fullfile(fp,'fa.nii'));
 %end doDesigner()
 
 function check = isdesigner(imgs)
@@ -311,6 +312,12 @@ path = fullfile(fileparts(imgPath),'PARAMAPS');
 nii = fullfile(fileparts(imgPath),'PARAMAPS','dwi_designer.nii');
 %end designerPath()
 
+function dofaThr(imgPath)
+% Threshold FA map; input is path to fa.nii
+dti_faThr=prepostfixSub('', '_thr', imgPath);
+command = sprintf('mrthreshold -abs 0.15 %s %s',imgPath,dti_faThr);
+system(command);
+%end dti_faThr
 
 %% Original Functions
 function doDkiTractSub(imgs,matName,dtiDir,atlas)
@@ -814,7 +821,7 @@ else
     atlasext = ['_' atlas];
 end
 template_roiW=prepostfixSub('', ['_roi', atlasext], nii);
-dti_faThr=fullfile(pth,'fa.nii');
+dti_faThr=prepostfixSub('', 'd_FA_thr', nii);
 mask_dir=fullfile(pth, ['masks', atlasext]);
 if ~exist(template_roiW,'file') || ~exist(dti_u,'file') || ~exist(dti_faThr,'file')
     error('doDtiTractSub Can not find %s or %s or %s\n',template_roiW, dti_u, dti_faThr);
