@@ -17,7 +17,7 @@ if ~isempty(strfind(hdr.descrip, maskKey))
     return;
 end
 img = spm_read_vols(hdr);
-if exist('isSaveCopy','var') && isSaveCopy
+if exist('isSaveCopy','var') & isSaveCopy
     [pth, nm, ext] = spm_fileparts(fnm);
     hdro = hdr;
     hdro.fname = fullfile(pth, [ nm, '_premask', ext]);  

@@ -244,6 +244,7 @@ desParams = '-denoise -degibbs -extent 5,5,5 -rician -mask -prealign -smooth 1.2
 mkdir(fp);
 command = ['python3 designer.py ' desParams ' ' imgs.DWI ' ' fp];
 [s,t]=system(command,'-echo');
+nii_famask(fullfile(fp,'fa.nii'),'true');
 dofaThr(fullfile(fp,'fa.nii'));
 %end doDesigner()
 
