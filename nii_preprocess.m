@@ -530,7 +530,8 @@ XYZmm = XYZmm(1:3);
 
 function doTractographySub(imgs)
 if isempty(imgs.DWI), return; end; %required
-FAimg = prepostfixSub('', 'd_FA', imgs.DWI);
+[pth,nii] = mapspath(imgs.DWI);
+FAimg = fullfile(pth,'fa.nii');
 if ~exist(FAimg,'file') , return; end; %required
 [p,n] = fsl_filepartsSub(imgs.DWI);
 basename = fullfile(p,n);
@@ -828,7 +829,7 @@ mask_dir=fullfile(pth, ['masks', atlasext]);
 if ~exist(template_roiW,'file') || ~exist(dti_u,'file') || ~exist(dti_faThr,'file')
     error('doDtiTractSub Can not find %s or %s or %s\n',template_roiW, dti_u, dti_faThr);
     return;
-end
+end@
 template_roiWThr=prepostfixSub('', ['_roi_thr', atlasext], nii);
 command=sprintf('fslmaths "%s" -mas "%s" "%s"',template_roiW, dti_faThr, template_roiWThr);
 fprintf('Creating thresholded image %s\n', template_roiWThr);
