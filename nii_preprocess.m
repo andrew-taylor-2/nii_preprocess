@@ -829,7 +829,7 @@ mask_dir=fullfile(pth, ['masks', atlasext]);
 if ~exist(template_roiW,'file') || ~exist(dti_u,'file') || ~exist(dti_faThr,'file')
     error('doDtiTractSub Can not find %s or %s or %s\n',template_roiW, dti_u, dti_faThr);
     return;
-end@
+end
 template_roiWThr=prepostfixSub('', ['_roi_thr', atlasext], nii);
 command=sprintf('fslmaths "%s" -mas "%s" "%s"',template_roiW, dti_faThr, template_roiWThr);
 fprintf('Creating thresholded image %s\n', template_roiWThr);
