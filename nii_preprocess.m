@@ -1,4 +1,4 @@
-function matName = nii_preprocess(imgs, matName, checkForUpdates, hideInteractiveGraphs)
+function matName = nii_preprocess(imgs, matName, checkForUpdates, hideInteractiveGraphs,topaxis)
 %preprocess data from multiple modalities3
 % imgs.T1: filename of T1 scan - ONLY REQUIRED INPUT: ALL OTHERS OPTIONAL
 % imgs.T2: filename used to draw lesion, if absent lesion drawn on T1
@@ -79,7 +79,7 @@ if true
             if ~nii_check_dims({imgs.DTI; imgs.DTIrev}), error('Fix DTI'); end;
             imgs = removeDotDtiSub(imgs);
             dtiDir = fileparts(imgs.DTI);
-            doDtiSub(imgs);
+            doDtiSub(imgs,topaxis);
             doFaMdSub(imgs, matName);
             %-->(un)comment next line for JHU tractography
             doDtiTractSub(imgs, matName, dtiDir, 'jhu');
@@ -454,7 +454,7 @@ nii_nii2mat(wFA, 'fa', matName); %6
 nii_nii2mat(wMD, 'md', matName); %8
 %end doFaMdSub()
 
-function doDtiSub(imgs)
+function doDtiSub(imgs,topaxis)
 if isempty(imgs.T1) || isempty(imgs.DTI), return; end; %required
 betT1 = prefixSub('b',imgs.T1); %brain extracted image
 if ~exist(betT1,'file'), fprintf('doDti unable to find %s\n', betT1); return; end; %required
@@ -499,10 +499,17 @@ else
     %9/2017: always use Eddy
     %if isFullSphereSub(imgs.DTI)
     if HalfSphere(imgs.DTI)
-        command= [fileparts(which(mfilename)) filesep 'dti_1_eddy_cuda_half.sh'];
-    
+        if isequal(topaxis,1)
+            command= [fileparts(which(mfilename)) filesep 'dti_1_eddy_cuda_half2.sh'];
+        else
+            command= [fileparts(which(mfilename)) filesep 'dti_1_eddy_cuda_half.sh'];
+        end
     else
-        command= [fileparts(which(mfilename)) filesep 'dti_1_eddy_cuda.sh'];
+        if isequal(topaxis,1)
+            command= [fileparts(which(mfilename)) filesep 'dti_1_eddy_cuda2.sh'];
+        else
+            command= [fileparts(which(mfilename)) filesep 'dti_1_eddy_cuda.sh'];
+        end
     end;
     %else
     %    command= [fileparts(which(mfilename)) filesep 'dti_1_eddy_correct.sh'];
